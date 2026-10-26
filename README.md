@@ -430,3 +430,33 @@ The cloud weekly schedule continues to be readable but **not editable**:
 the historical custom integration only implements the ChZn1 GET route;
 there is no verified boiler-specific schedule write contract yet. Preserve
 the original Cube S plan and never send an experimental setter.
+
+
+## 0.8.4 — Smc-only gas entities and clock-aligned refresh
+
+On-device tests confirmed the four `asPhysicalUnit` Smc readings and real
+ACS Comfort switch. The four redundant mobile **kWh gas entities are no
+longer created**, and the mobile gas-sequence coordinator is no longer
+started. Source code for reading mobile diagnostic sequences remains
+available for comparisons, but those values are not exposed as sensors.
+Home Assistant can retain obsolete kWh *entity registry* entries from
+past installations; remove only those optional old Ariston Cube entries
+manually after verifying 0.8.4. No entity IDs, Recorder rows or the separate
+legacy `ariston` integration are altered by the update.
+
+Comfort ACS polls U6_9_2 every **5 minutes**, down from 30 minutes, while
+a user-originated ON/OFF command still includes immediate readback.
+Changes through the phone app can take up to about five minutes plus
+cloud propagation to appear in Home Assistant.
+
+Smc reads no longer depend on the most recent Home Assistant restart time.
+The integration reads once at startup, then at local even hours
+**02:10, 02:40, 04:10, 04:40, …, 22:10, 22:40**, capturing completed
+2h cloud slots with one confirmation poll if Ariston uploads late.
+A six-hour fallback remains for abnormal missed clock callbacks. All
+scheduled event listeners are unsubscribed when the integration is unloaded.
+The existing Smc sensor unique IDs stay unchanged; this release still does
+**not** register a lifetime gas meter with Home Assistant Energy.
+
+Editing Cube S timeProgs ChZn1 is separate unfinished work requiring
+a verified cloud schedule-write contract and safe readback.

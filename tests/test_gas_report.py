@@ -63,12 +63,10 @@ def test_bad_buckets_and_duplicated_series_are_unavailable():
     assert data["heating_today"] is None
 
 
-def test_no_lifetime_meter_or_legacy_unique_id():
+def test_mobile_kwh_series_not_created_as_home_assistant_entities():
     source = (ROOT / "sensor.py").read_text()
-    coordinator = (ROOT / "gas_coordinator.py").read_text()
-    assert "class AristonRecentGas" in source
-    assert "AristonLastMonthGas" not in source
-    assert "_attr_state_class" not in source.split("class AristonRecentGas")[1]
-    assert '"recent_gas_{report_key}"' in source
-    assert "timedelta(hours=2)" in coordinator
-    assert "async_read_gas_sequences" in coordinator
+    assert "AristonRecentGas" not in source
+    assert "AristonGasCoordinator" not in source
+    assert "recent_gas_" not in source
+    assert "AristonPhysicalGas" in source
+

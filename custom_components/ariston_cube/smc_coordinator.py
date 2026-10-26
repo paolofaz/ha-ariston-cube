@@ -1,4 +1,4 @@
-"""Optional low-rate reports for physical gas volumes in Smc."""
+"""Smc report coordinator with clock-aligned reads and six-hour fallback."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class AristonSmcCoordinator(DataUpdateCoordinator):
-    """Web reports are independent of all previously working mobile entities."""
+    """Web reports are independent of the mobile data-items coordinator."""
 
     def __init__(self, hass, main):
         super().__init__(
             hass, _LOGGER, name="ariston_cube_physical_gas_smc",
-            update_interval=timedelta(hours=2),
+            update_interval=timedelta(hours=6),
         )
         self.client = main.client
         self.plant_id = main.plant_id

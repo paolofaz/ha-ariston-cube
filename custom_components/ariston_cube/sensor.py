@@ -3,13 +3,13 @@
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
-from homeassistant.const import UnitOfTemperature, UnitOfPressure, UnitOfEnergy
+from homeassistant.const import UnitOfTemperature, UnitOfPressure
 
 from .entity import AristonEntity
 from .model import as_temperature
 from .schedule_coordinator import get_or_create_weekly_coordinator
-from .gas_coordinator import AristonGasCoordinator
 from .smc_coordinator import AristonSmcCoordinator
+from homeassistant.helpers.event import async_track_time_change
 from .weekly_program import daily_description
 
 DESCRIPTIONS = (
@@ -64,13 +64,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     schedule = get_or_create_weekly_coordinator(hass, entry)
     entities = [AristonTemperature(coordinator, description) for description in DESCRIPTIONS]
     entities.append(AristonWeeklySchedule(schedule))
-    gas = AristonGasCoordinator(hass, coordinator)
-    entities.extend([
-        AristonRecentGas(gas, "heating_today", "heating_gas_today"),
-        AristonRecentGas(gas, "dhw_today", "dhw_gas_today"),
-        AristonRecentGas(gas, "heating_2h", "heating_gas_2h"),
-        AristonRecentGas(gas, "dhw_2h", "dhw_gas_2h"),
-    ])
     smc = AristonSmcCoordinator(hass, coordinator)
     entities.extend([
         AristonPhysicalGas(smc, "heating_smc_today", "heating_smc_today"),
@@ -79,9 +72,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
         AristonPhysicalGas(smc, "dhw_smc_2h", "dhw_smc_2h"),
     ])
     async_add_entities(entities)
-    entry.async_create_background_task(
-        hass, gas.async_refresh(), "Ariston Cube two-hour gas initial read"
+
+    # Ariston publishes its completed two-hour gas buckets on local-clock
+    # boundaries. Read at :10 and :40 after each even hour, independent of
+    # when Home Assistant last restarted. Skip 00:xx because the CurrentDay
+    # report cannot yet include the current day's first completed slot.
+    async def _refresh_smc(_now):
+        await smc.async_refresh()
+
+    unsubscribe = async_track_time_change(
+        hass, _refresh_smc,
+        hour=tuple(range(2, 24, 2)),
+        minute=(10, 40),
+        second=0,
     )
+    entry.async_on_unload(unsubscribe)
     entry.async_create_background_task(
         hass, smc.async_refresh(), "Ariston Cube Smc initial read"
     )
@@ -160,37 +165,6 @@ class AristonWeeklySchedule(AristonEntity, SensorEntity):
     def available(self) -> bool:
         return super().available and self.native_value is not None
 
-
-
-
-class AristonRecentGas(AristonEntity, SensorEntity):
-    """Recent period gas report; NEVER a monotonically growing lifetime meter."""
-
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_icon = "mdi:fire"
-    # No total/total_increasing state class: today's value resets at midnight
-    # and the two-hour report is per-slot, not an accumulating meter.
-
-    def __init__(self, coordinator, report_key: str, translation_key: str):
-        super().__init__(coordinator, f"recent_gas_{report_key}")
-        self._attr_translation_key = translation_key
-        self.report_key = report_key
-
-    @property
-    def native_value(self) -> float | None:
-        data = self.coordinator.data
-        return data.get(self.report_key) if data else None
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        if self.report_key.endswith("_2h") and self.coordinator.data:
-            return {"fascia_bioraria": self.coordinator.data.get("slot"),
-                    "fascia_in_corso": True}
-        return {}
-
-    @property
-    def available(self) -> bool:
-        return super().available and self.native_value is not None
 
 
 

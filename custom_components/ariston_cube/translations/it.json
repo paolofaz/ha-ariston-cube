@@ -53,18 +53,6 @@
       "heating_pressure": {
         "name": "Pressione circuito riscaldamento"
       },
-      "heating_gas_today": {
-        "name": "Gas riscaldamento oggi"
-      },
-      "dhw_gas_today": {
-        "name": "Gas ACS oggi"
-      },
-      "heating_gas_2h": {
-        "name": "Gas riscaldamento fascia bioraria"
-      },
-      "dhw_gas_2h": {
-        "name": "Gas ACS fascia bioraria"
-      },
       "heating_smc_today": {
         "name": "Gas riscaldamento oggi Smc"
       },

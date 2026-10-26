@@ -53,18 +53,6 @@
       "heating_pressure": {
         "name": "Heating circuit pressure"
       },
-      "heating_gas_today": {
-        "name": "Heating gas today"
-      },
-      "dhw_gas_today": {
-        "name": "Hot water gas today"
-      },
-      "heating_gas_2h": {
-        "name": "Heating gas current two-hour period"
-      },
-      "dhw_gas_2h": {
-        "name": "Hot water gas current two-hour period"
-      },
       "heating_smc_today": {
         "name": "Heating gas Smc today"
       },

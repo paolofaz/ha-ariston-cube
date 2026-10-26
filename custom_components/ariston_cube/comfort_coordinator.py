@@ -19,7 +19,7 @@ class AristonDhwComfortCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, main):
         super().__init__(
             hass, _LOGGER, name="ariston_cube_acs_comfort",
-            update_interval=timedelta(minutes=30),
+            update_interval=timedelta(minutes=5),
         )
         self.client = main.client
         self.plant_id = main.plant_id
