@@ -344,3 +344,28 @@ supports authenticated readback on this actual boiler. Historical
 `/R2/Account/Login` failures mean working mobile authentication is not
 yet proof of web-menu access. Do not equate mobile `DhwMode` with this
 web-menu parameter. Do not fabricate an optimistic switch.
+
+
+## Experimental 0.8.0 — real physical Smc and ACS Comfort
+
+A separate authenticated R2 web session now uses the portal anti-forgery
+token and session cookie, never the mobile ar.authToken. This protocol
+was independently documented in HAL9000RELOADED/elco-remocon-net.
+It has **not yet been field-tested on this particular Ariston account**.
+
+Four new Smc observational entities read the server's original
+`asPhysicalUnit.histogramData` CurrentDay 2-hour slots (CH and DHW)
+from /R2/PlantMetering/GetData. No guessed gas calorific factor is used.
+They become unavailable if the web portal cannot be reached. The existing
+kWh gas entities are untouched. Smc series are not cumulative gas meters
+and have no TOTAL_INCREASING state class.
+
+The new Comfort ACS switch reads the real U6_9_2 web menu parameter
+and sends only 0 (OFF) or 2 (Always active) to /R2/PlantMenu/Submit.
+A timed state 1 leaves the switch unavailable. A single explicit
+command must be permitted by the menu options and its readback must match.
+No automatic writes or write retries. The control is not yet confirmed
+on this physical boiler.
+
+Previously working mobile controls, Recorder data and old Ariston
+integration remain independent and unchanged.

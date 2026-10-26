@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from .api import AristonError
+from .web_portal import WebPortalError
 
 # A strict semantic key allowlist: unknown/dynamic keys are not returned.
 _ALLOWED_FIELDS = frozenset({
@@ -146,7 +147,7 @@ def safe_consumption_units(raw: Any) -> dict[str, str]:
 
 def safe_dhw_comfort_menu(raw: Any) -> dict[str, str]:
     """Show only a known 0/1/2 Comfort ACS code, never raw web responses."""
-    if isinstance(raw, AristonError):
+    if isinstance(raw, (AristonError, WebPortalError)):
         return {"status": "non_disponibile", "error_type": type(raw).__name__}
     records = raw if isinstance(raw, list) else raw.get("items") if isinstance(raw, dict) else None
     if not isinstance(records, list):
@@ -188,7 +189,7 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     # Only static entity names; no account or plant data in the output.
     return {
         "integration": "ariston_cube",
-        "version": "0.7.3",
+        "version": "0.8.0",
         "purpose": "schema_only_no_personal_values",
         "reports": safe_reports,
         "consumption_inventory": safe_consumption_inventory(
