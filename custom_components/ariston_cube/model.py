@@ -6,6 +6,7 @@ from typing import Any
 
 PLANT_IDS = frozenset((
     "PlantMode",
+    "AutomaticThermoregulation",
     "IsFlameOn",
     "DhwTemp",
     "DhwStorageTemperature",

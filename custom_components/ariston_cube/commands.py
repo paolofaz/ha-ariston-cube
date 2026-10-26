@@ -153,3 +153,43 @@ def build_zone_mode_request(
         }],
         "features": features,
     }
+
+
+
+def build_plant_control_request(snapshot, features, item_id: str, value: int):
+    """Use only declared boiler modes or a documented 0/1 thermoregulation."""
+    if not isinstance(features, dict) or not features:
+        raise CommandRejected("Device capabilities unavailable")
+    if type(value) is not int:
+        raise CommandRejected("Unsupported control value")
+    if item_id == "PlantMode":
+        allowed = (0, 1, 5)
+    elif item_id == "AutomaticThermoregulation":
+        allowed = (0, 1)
+    else:
+        raise CommandRejected("Unsupported plant control")
+    if value not in allowed:
+        raise CommandRejected("Unsupported plant mode")
+    record = snapshot.get(item_id)
+    if not isinstance(record, dict):
+        raise CommandRejected("Property not available on this boiler")
+    old = enum_code(record)
+    if old is None:
+        raise CommandRejected("Unknown previous state")
+    if item_id == "PlantMode" and old not in range(7):
+        raise CommandRejected("Unknown prior boiler mode")
+    if item_id == "AutomaticThermoregulation" and old not in (0, 1):
+        raise CommandRejected("Unknown prior automatic thermoregulation")
+    options = record.get("options")
+    if item_id == "PlantMode" and not isinstance(options, list):
+        raise CommandRejected("Supported boiler modes missing")
+    if options is not None:
+        if not isinstance(options, list) or not options:
+            raise CommandRejected("Invalid cloud control options")
+        options_valid = {enum_code({"value": v}) for v in options if not isinstance(v, bool)}
+        if value not in options_valid:
+            raise CommandRejected("Selected mode not supported by the boiler")
+    if value == old:
+        return None
+    return {"items": [{"id": item_id, "zone": 0, "prevValue": old, "value": value}],
+            "features": features}

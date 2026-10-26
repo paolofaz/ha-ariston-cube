@@ -25,6 +25,8 @@ def _setup_module(monkeypatch):
         CLIMATE = "climate"
         WATER_HEATER = "water_heater"
         NUMBER = "number"
+        SELECT = "select"
+        SWITCH = "switch"
 
     hass_module = types.ModuleType("homeassistant")
     hass_module.__path__ = []
@@ -78,7 +80,7 @@ def _setup_module(monkeypatch):
     return module
 
 
-def test_async_setup_entry_reports_success_and_forwards_four_platforms(monkeypatch):
+def test_async_setup_entry_reports_success_and_forwards_six_platforms(monkeypatch):
     integration = _setup_module(monkeypatch)
     platforms = []
 
@@ -91,7 +93,7 @@ def test_async_setup_entry_reports_success_and_forwards_four_platforms(monkeypat
 
     assert asyncio.run(integration.async_setup_entry(hass, entry)) is True
     assert entry.runtime_data.first_refresh_called
-    assert set(platforms) == {"sensor", "binary_sensor", "climate", "number"}
+    assert set(platforms) == {"sensor", "binary_sensor", "climate", "number", "select", "switch"}
 
 
 def test_setup_does_not_return_none(monkeypatch):

@@ -164,3 +164,18 @@ any of the scheduled times or temperature readings.
 This is still insufficient to calculate lifetime energy statistics; time
 alignment, metering units, rollover and possible cloud corrections remain to
 be validated. The original Recorder history is never modified.
+
+
+## Experimental next controls in 0.6.0
+Manual SELECT for whole-plant PlantMode: Modalità inverno=1,
+Modalità estate=0 and Spenta=5. This is distinct from the climate ZoneMode.
+A control is rejected if cloud-reported supported modes are absent.
+Manual SWITCH for AutomaticThermoregulation=0/1 controls automatic heating
+flow-temperature regulation; it is independent from the Cube S weekly AUTO.
+Each manual action reads its current value, performs one write, then checks
+readback without retrying or making automatic changes on startup.
+
+PENDING: the legacy DHW comfort/preheat function is web-menu parameter
+U6_9_2 via /R2/PlantMenu/Submit, NOT the mobile API's DhwMode. Because
+web login previously returned 403, no potentially misleading switch has
+been created to toggle DhwMode in its place. Read-only investigation first.

@@ -62,6 +62,16 @@
       "heating_comfort": {
         "name": "Temperatura Comfort riscaldamento"
       }
+    },
+    "select": {
+      "plant_mode": {
+        "name": "Modalità caldaia"
+      }
+    },
+    "switch": {
+      "automatic_thermoregulation": {
+        "name": "Termoregolazione automatica"
+      }
     }
   }
 }

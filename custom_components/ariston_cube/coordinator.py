@@ -64,3 +64,16 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             _LOGGER.warning("Ariston heating mode not confirmed: %s", exc)
             raise HomeAssistantError(str(exc)) from exc
         self.async_set_updated_data(after)
+
+
+    async def async_set_plant_control(self, item_id: str, value: int) -> None:
+        """Control the plant only after an explicit entity service call."""
+        try:
+            after = await self.client.async_set_plant_control(
+                self.plant_id, item_id, value)
+        except CommandRejected as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        except AristonError as exc:
+            _LOGGER.warning("Ariston plant control not confirmed: %s", exc)
+            raise HomeAssistantError(str(exc)) from exc
+        self.async_set_updated_data(after)

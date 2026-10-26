@@ -14,7 +14,7 @@ import aiohttp
 
 from .const import BASE_URL
 from .model import make_main_request, parse_main_data, as_temperature, parse_plants
-from .commands import CommandRejected, build_setpoint_request, build_zone_mode_request
+from .commands import CommandRejected, build_setpoint_request, build_zone_mode_request, build_plant_control_request
 from .states import enum_code
 
 MOBILE_USER_AGENT = "RestSharp/106.11.7.0"
@@ -247,3 +247,30 @@ class AristonClient:
                 except AristonError as exc:
                     responses[kind] = exc
         return responses
+
+
+    async def async_set_plant_control(self, plant_id: str, item_id: str, value: int):
+        """One explicit global control write and a separate verification read."""
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            features = await self._load_features(plant_id)
+            read_path = f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si"
+            fresh = parse_main_data(await self._request(
+                "POST", read_path, json_body=make_main_request(features)))
+            body = build_plant_control_request(fresh, features, item_id, value)
+            if body is None:
+                return fresh
+            response = await self._request(
+                "POST", f"/api/v2/remote/dataItems/{plant_id}/set?umsys=si",
+                json_body=body)
+            if isinstance(response, dict) and (
+                response.get("success") is False or response.get("ok") is False
+            ):
+                raise AristonResponseError("Ariston refused plant control")
+            after = parse_main_data(await self._request(
+                "POST", read_path, json_body=make_main_request(features)))
+            if enum_code(after.get(item_id)) != value:
+                raise AristonResponseError(
+                    "Plant command sent but unconfirmed: do not retry immediately")
+            return after

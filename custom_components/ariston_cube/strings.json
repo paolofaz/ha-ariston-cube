@@ -62,6 +62,16 @@
       "heating_comfort": {
         "name": "Heating Comfort temperature"
       }
+    },
+    "select": {
+      "plant_mode": {
+        "name": "Boiler mode"
+      }
+    },
+    "switch": {
+      "automatic_thermoregulation": {
+        "name": "Automatic thermoregulation"
+      }
     }
   }
 }
