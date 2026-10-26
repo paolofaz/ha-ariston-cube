@@ -64,6 +64,18 @@
       },
       "dhw_gas_2h": {
         "name": "Hot water gas current two-hour period"
+      },
+      "heating_smc_today": {
+        "name": "Heating gas Smc today"
+      },
+      "dhw_smc_today": {
+        "name": "Hot water gas Smc today"
+      },
+      "heating_smc_2h": {
+        "name": "Heating gas last completed 2h Smc"
+      },
+      "dhw_smc_2h": {
+        "name": "Hot water gas last completed 2h Smc"
       }
     },
     "binary_sensor": {
@@ -98,6 +110,9 @@
     "switch": {
       "automatic_thermoregulation": {
         "name": "Automatic thermoregulation"
+      },
+      "acs_comfort": {
+        "name": "DHW Comfort"
       }
     },
     "calendar": {

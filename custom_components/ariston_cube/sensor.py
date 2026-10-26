@@ -9,6 +9,7 @@ from .entity import AristonEntity
 from .model import as_temperature
 from .schedule_coordinator import get_or_create_weekly_coordinator
 from .gas_coordinator import AristonGasCoordinator
+from .smc_coordinator import AristonSmcCoordinator
 from .weekly_program import daily_description
 
 DESCRIPTIONS = (
@@ -70,9 +71,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
         AristonRecentGas(gas, "heating_2h", "heating_gas_2h"),
         AristonRecentGas(gas, "dhw_2h", "dhw_gas_2h"),
     ])
+    smc = AristonSmcCoordinator(hass, coordinator)
+    entities.extend([
+        AristonPhysicalGas(smc, "heating_smc_today", "heating_smc_today"),
+        AristonPhysicalGas(smc, "dhw_smc_today", "dhw_smc_today"),
+        AristonPhysicalGas(smc, "heating_smc_2h", "heating_smc_2h"),
+        AristonPhysicalGas(smc, "dhw_smc_2h", "dhw_smc_2h"),
+    ])
     async_add_entities(entities)
     entry.async_create_background_task(
         hass, gas.async_refresh(), "Ariston Cube two-hour gas initial read"
+    )
+    entry.async_create_background_task(
+        hass, smc.async_refresh(), "Ariston Cube Smc initial read"
     )
 
 
@@ -175,6 +186,36 @@ class AristonRecentGas(AristonEntity, SensorEntity):
         if self.report_key.endswith("_2h") and self.coordinator.data:
             return {"fascia_bioraria": self.coordinator.data.get("slot"),
                     "fascia_in_corso": True}
+        return {}
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.native_value is not None
+
+
+
+class AristonPhysicalGas(AristonEntity, SensorEntity):
+    """Raw physical Smc by period, not a running meter."""
+
+    _attr_native_unit_of_measurement = "Smc"
+    _attr_icon = "mdi:meter-gas"
+    # Standard m³ is not interchangeable with uncorrected m³.
+    # No GAS device_class or cumulative state class is advertised.
+
+    def __init__(self, coordinator, source_key: str, translation_key: str):
+        super().__init__(coordinator, "web_smc_" + source_key)
+        self._source_key = source_key
+        self._attr_translation_key = translation_key
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        return data.get(self._source_key) if data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if self._source_key.endswith("_2h") and self.coordinator.data:
+            return {"fascia_completata": self.coordinator.data.get("completed_interval")}
         return {}
 
     @property

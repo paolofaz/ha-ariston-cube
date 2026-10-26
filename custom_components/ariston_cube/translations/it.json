@@ -64,6 +64,18 @@
       },
       "dhw_gas_2h": {
         "name": "Gas ACS fascia bioraria"
+      },
+      "heating_smc_today": {
+        "name": "Gas riscaldamento oggi Smc"
+      },
+      "dhw_smc_today": {
+        "name": "Gas ACS oggi Smc"
+      },
+      "heating_smc_2h": {
+        "name": "Gas riscaldamento fascia conclusa Smc"
+      },
+      "dhw_smc_2h": {
+        "name": "Gas ACS fascia conclusa Smc"
       }
     },
     "binary_sensor": {
@@ -98,6 +110,9 @@
     "switch": {
       "automatic_thermoregulation": {
         "name": "Termoregolazione automatica"
+      },
+      "acs_comfort": {
+        "name": "Comfort ACS"
       }
     },
     "calendar": {
