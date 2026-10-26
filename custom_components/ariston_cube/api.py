@@ -16,6 +16,7 @@ from .const import BASE_URL
 from .model import make_main_request, parse_main_data, as_temperature, parse_plants
 from .commands import CommandRejected, build_setpoint_request, build_zone_mode_request, build_plant_control_request
 from .states import enum_code
+from .web_portal import AristonWebPortal, WebPortalError
 
 MOBILE_USER_AGENT = "RestSharp/106.11.7.0"
 
@@ -61,6 +62,7 @@ class AristonClient:
         self._token: str | None = None
         self._features: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+        self.web_portal = AristonWebPortal(session, username, password)
 
     async def _request(
         self, method: str, path: str, *,
@@ -290,27 +292,12 @@ class AristonClient:
 
 
     async def async_probe_dhw_comfort_menu(self, plant_id: str) -> Any:
-        """Read U6_9_2 via the two legacy *read* endpoints, on demand only.
-
-        This intentionally does not attempt the unverified login or make any
-        write; an unavailable/unauthorized result proves no control support.
-        """
-        paths = (
-            f"/R2/PlantMenu/Refresh?id={plant_id}&paramIds=U6_9_2",
-            f"/Menu/User/Refresh/{plant_id}?paramIds=U6_9_2",
-        )
-        async with self._lock:
-            if not self._token:
-                await self.async_login()
-            last_error: AristonError | None = None
-            for path in paths:
-                try:
-                    return await self._request("GET", path)
-                except AristonError as exc:
-                    last_error = exc
-            return last_error or AristonResponseError(
-                "Comfort ACS menu endpoint unavailable"
-            )
+        """Probe the authentic R2 session, not a mobile token on a web route."""
+        try:
+            data = await self.web_portal.async_read_comfort(plant_id)
+            return [{"id": "U6_9_2", "value": data["value"]}]
+        except WebPortalError as exc:
+            return exc
 
     async def async_read_weekly_program(self, plant_id: str) -> dict[str, Any]:
         """Read the existing Cube S schedule. Never issue a programme write."""

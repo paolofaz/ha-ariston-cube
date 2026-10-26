@@ -1,0 +1,212 @@
+"""Separate Ariston /R2 cookie login for read/write Comfort and Smc reports.
+
+The mobile 'ar.authToken' does NOT authenticate /R2. The HTML login has an
+anti-forgery form token that must be echoed as a cookie. No user credentials,
+cookies or response payloads are ever logged.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import html
+import json
+import re
+from typing import Any
+
+import aiohttp
+from yarl import URL
+
+from .const import BASE_URL
+
+_TOKEN_RE = re.compile(
+    r'name=["\']__RequestVerificationToken["\'][^>]*value=["\']([^"\']+)',
+    flags=re.IGNORECASE,
+)
+_XHR_HEADERS = {
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "Ajax-Request": "json",
+    "X-Requested-With": "XMLHttpRequest",
+    "Content-Type": "application/json; charset=UTF-8",
+}
+
+
+class WebPortalError(Exception):
+    """Sanitized web portal error—never includes raw response or URL."""
+
+
+class WebPortalAuthError(WebPortalError):
+    """Cookie login cannot be established."""
+
+
+class AristonWebPortal:
+    """Serializes /R2 requests; never mixes mobile and web authentication."""
+
+    def __init__(self, session: aiohttp.ClientSession, username: str, password: str):
+        self._session = session
+        self._username = username
+        self._password = password
+        self._logged_in = False
+        self._lock = asyncio.Lock()
+
+    async def _login(self) -> None:
+        """Use official R2 anti-CSRF cookie login, once per session."""
+        if self._logged_in:
+            return
+        try:
+            async with self._session.get(
+                BASE_URL + "/R2/Account/Login",
+                timeout=aiohttp.ClientTimeout(total=25),
+                allow_redirects=False,
+            ) as response:
+                if response.status != 200:
+                    raise WebPortalAuthError("Web login form unavailable")
+                form = await response.text()
+            match = _TOKEN_RE.search(form)
+            if not match:
+                raise WebPortalAuthError("Web login anti-forgery token unavailable")
+            cookie = html.unescape(match.group(1))
+            self._session.cookie_jar.update_cookies(
+                {"__formRequestVerificationToken": cookie},
+                response_url=URL(BASE_URL),
+            )
+            async with self._session.post(
+                BASE_URL + "/R2/Account/Login",
+                headers=_XHR_HEADERS,
+                json={
+                    "email": self._username,
+                    "password": self._password,
+                    "rememberMe": False,
+                    "language": "Italian_It",
+                },
+                timeout=aiohttp.ClientTimeout(total=25),
+                allow_redirects=False,
+            ) as response:
+                if response.status != 200:
+                    raise WebPortalAuthError("Web login POST unavailable")
+                try:
+                    data = await response.json(content_type=None)
+                except (ValueError, json.JSONDecodeError, aiohttp.ContentTypeError):
+                    raise WebPortalAuthError("Non-JSON web login reply") from None
+            if not isinstance(data, dict) or data.get("ok") is not True:
+                raise WebPortalAuthError("Web portal rejected login")
+            self._logged_in = True
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            raise WebPortalAuthError(
+                f"Web portal {type(exc).__name__} during login"
+            ) from exc
+
+    async def _request(self, method: str, path: str, *, payload: Any = None) -> Any:
+        """Authenticated web request with no retries on POST or errors."""
+        try:
+            async with self._session.request(
+                method, BASE_URL + path,
+                headers=_XHR_HEADERS,
+                json=payload if method == "POST" else None,
+                timeout=aiohttp.ClientTimeout(total=35),
+                allow_redirects=False,
+            ) as response:
+                if response.status in (301, 302, 303, 401, 403):
+                    self._logged_in = False
+                    raise WebPortalAuthError("Web portal authorization failed")
+                if response.status != 200:
+                    raise WebPortalError(f"Web portal HTTP {response.status}")
+                try:
+                    return await response.json(content_type=None)
+                except (ValueError, json.JSONDecodeError, aiohttp.ContentTypeError):
+                    raise WebPortalError("Web portal returned non-JSON") from None
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            raise WebPortalError(f"Web portal {type(exc).__name__}") from exc
+
+    @staticmethod
+    def _unwrap(data: Any) -> Any:
+        return data.get("data") if isinstance(data, dict) and "data" in data else data
+
+    @staticmethod
+    def comfort_record(data: Any) -> dict[str, Any]:
+        """Read only the exact legacy user-menu U6_9_2 parameter."""
+        entries = AristonWebPortal._unwrap(data)
+        if not isinstance(entries, list):
+            raise WebPortalError("Unexpected ACS Comfort response")
+        records = [
+            row for row in entries
+            if isinstance(row, dict) and row.get("id") == "U6_9_2"
+        ]
+        if len(records) != 1:
+            raise WebPortalError("ACS Comfort parameter absent or duplicated")
+        record = records[0]
+        raw = record.get("value")
+        if type(raw) is int:
+            code = raw
+        elif isinstance(raw, str) and raw in ("0", "1", "2"):
+            code = int(raw)
+        else:
+            raise WebPortalError("Unexpected ACS Comfort value")
+        if code not in (0, 1, 2):
+            raise WebPortalError("Unsupported ACS Comfort value")
+        return {"value": code, "dropDownOptions": record.get("dropDownOptions")}
+
+    async def async_read_comfort(self, gateway: str) -> dict[str, Any]:
+        async with self._lock:
+            await self._login()
+            return self.comfort_record(await self._request(
+                "GET", f"/R2/PlantMenu/Refresh?id={gateway}&paramIds=U6_9_2"
+            ))
+
+    async def async_set_comfort(self, gateway: str, desired: int) -> int:
+        """Set only OFF (0) or ALWAYS (2), single non-retried write + readback."""
+        if type(desired) is not int or desired not in (0, 2):
+            raise WebPortalError("Only OFF and Always Active are supported")
+        async with self._lock:
+            await self._login()
+            path = f"/R2/PlantMenu/Refresh?id={gateway}&paramIds=U6_9_2"
+            before = self.comfort_record(await self._request("GET", path))
+            old = before["value"]
+            if old == 1:
+                # We intentionally do not trample a time-based schedule.
+                raise WebPortalError("Timed ACS Comfort must be changed at the boiler")
+            options = before.get("dropDownOptions")
+            if not isinstance(options, list):
+                raise WebPortalError("Comfort choices not declared by gateway")
+            allowed = {
+                opt.get("value") for opt in options
+                if isinstance(opt, dict) and type(opt.get("value")) is int
+            }
+            if desired not in allowed:
+                raise WebPortalError("Desired Comfort mode not offered")
+            if desired == old:
+                return old
+            response = await self._request(
+                "POST", f"/R2/PlantMenu/Submit/{gateway}",
+                payload=[{
+                    "id": "U6_9_2", "value": desired, "prevValue": old,
+                }],
+            )
+            if isinstance(response, dict) and (
+                response.get("ok") is False or response.get("success") is False
+            ):
+                raise WebPortalError("ACS Comfort command rejected")
+            confirmed = self.comfort_record(await self._request("GET", path))["value"]
+            if confirmed != desired:
+                raise WebPortalError(
+                    "ACS Comfort write sent but not confirmed: do not repeat"
+                )
+            return confirmed
+
+    async def async_read_metering(self, gateway: str) -> dict[str, Any]:
+        """Read gateway-provided physical Smc report; no guessed conversion."""
+        async with self._lock:
+            await self._login()
+            features = self._unwrap(await self._request(
+                "GET", f"/R2/Plant/Features/{gateway}?eagerMode=true"
+            ))
+            if not isinstance(features, dict) or not features:
+                raise WebPortalError("Metering features unavailable")
+            report = self._unwrap(await self._request(
+                "POST", f"/R2/PlantMetering/GetData/{gateway}",
+                payload={"features": features, "hasCooling": False},
+            ))
+            if not isinstance(report, dict) or not isinstance(
+                report.get("asPhysicalUnit"), dict
+            ):
+                raise WebPortalError("Physical Smc data not available")
+            return report
