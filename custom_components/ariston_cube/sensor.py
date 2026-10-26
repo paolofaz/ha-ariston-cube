@@ -65,12 +65,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities.append(AristonWeeklySchedule(schedule))
     gas = AristonGasCoordinator(hass, coordinator)
     entities.extend([
-        AristonLastMonthGas(gas, "heating", "heating_gas_last_month"),
-        AristonLastMonthGas(gas, "dhw", "dhw_gas_last_month"),
+        AristonRecentGas(gas, "heating_today", "heating_gas_today"),
+        AristonRecentGas(gas, "dhw_today", "dhw_gas_today"),
+        AristonRecentGas(gas, "heating_2h", "heating_gas_2h"),
+        AristonRecentGas(gas, "dhw_2h", "dhw_gas_2h"),
     ])
     async_add_entities(entities)
     entry.async_create_background_task(
-        hass, gas.async_refresh(), "Ariston Cube monthly gas initial read"
+        hass, gas.async_refresh(), "Ariston Cube two-hour gas initial read"
     )
 
 
@@ -149,16 +151,17 @@ class AristonWeeklySchedule(AristonEntity, SensorEntity):
 
 
 
-class AristonLastMonthGas(AristonEntity, SensorEntity):
-    """A previous-calendar-month report, never a lifetime gas counter."""
+
+class AristonRecentGas(AristonEntity, SensorEntity):
+    """Recent period gas report; NEVER a monotonically growing lifetime meter."""
 
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:fire"
-    # Intentionally NO TOTAL_INCREASING or TOTAL state class: LastMonth is a
-    # replaceable period report. Do not auto-ingest into the Energy dashboard.
+    # No total/total_increasing state class: today's value resets at midnight
+    # and the two-hour report is per-slot, not an accumulating meter.
 
     def __init__(self, coordinator, report_key: str, translation_key: str):
-        super().__init__(coordinator, f"gas_last_month_{report_key}")
+        super().__init__(coordinator, f"recent_gas_{report_key}")
         self._attr_translation_key = translation_key
         self.report_key = report_key
 
@@ -166,6 +169,13 @@ class AristonLastMonthGas(AristonEntity, SensorEntity):
     def native_value(self) -> float | None:
         data = self.coordinator.data
         return data.get(self.report_key) if data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if self.report_key.endswith("_2h") and self.coordinator.data:
+            return {"fascia_bioraria": self.coordinator.data.get("slot"),
+                    "fascia_in_corso": True}
+        return {}
 
     @property
     def available(self) -> bool:

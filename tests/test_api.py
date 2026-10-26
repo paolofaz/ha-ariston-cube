@@ -480,3 +480,24 @@ def test_last_month_energy_account_get_only():
     assert session.calls[-1][0] == "GET"
     assert session.calls[-1][1].endswith("/reports/GW123/energyAccount")
     assert not any("/set?" in url for _, url, _ in session.calls)
+
+
+
+def test_recent_gas_uses_cloud_two_hour_report_once():
+    raw = [{"p": 1, "k": 7, "v": [0.0] * 24},
+           {"p": 1, "k": 10, "v": [0.0] * 24}]
+    session = Session(
+        Response({"token": "token"}),
+        Response(raw),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        assert await client.async_read_gas_sequences("GW123") == raw
+    run(scenario())
+    reads = [(method, url) for method, url, opts in session.calls
+             if "/consSequencesApi8" in url]
+    assert len(reads) == 1
+    assert reads[0][0] == "GET"
+    assert reads[0][1].endswith(
+        "/reports/GW123/consSequencesApi8?usages=Ch%2CDhw&hasSlp=False"
+    )

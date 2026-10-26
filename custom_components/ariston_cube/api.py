@@ -329,3 +329,28 @@ class AristonClient:
                         raise
                     await self.async_login()
             raise AristonAuthError("Energy report authorization failed")
+
+
+
+    async def async_read_gas_sequences(self, plant_id: str) -> list[dict[str, Any]]:
+        """Fetch two-hour heating/DHW consumption via the existing reports API."""
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = (
+                f"/api/v2/remote/reports/{plant_id}/consSequencesApi8"
+                "?usages=Ch%2CDhw&hasSlp=False"
+            )
+            for attempt in range(2):
+                try:
+                    result = await self._request("GET", path)
+                    if not isinstance(result, list):
+                        raise AristonResponseError("Unexpected consumption-series response")
+                    return result
+                except AristonAuthError:
+                    self._token = None
+                    self._features.clear()
+                    if attempt:
+                        raise
+                    await self.async_login()
+            raise AristonAuthError("Consumption report authentication failed")

@@ -268,3 +268,36 @@ this release does not pretend these are cubic meters.
   comparison with the legacy entities. These values are **not** lifetime
   meters and must not be renamed to replace long-term Recorder statistics.
   No change to the existing Recorder database has been attempted.
+
+
+## 0.7.1 — current-day and two-hour gas use (replaces monthly entities)
+
+The user's existing integration previously used `consSequencesApi8` for
+gas consumption in 2-hour buckets, reporting independent heating (k=7)
+and domestic hot-water (k=10) values with period p=1. Its raw sequence
+contains 24 two-hour values, oldest first: the latest corresponds to
+the current two-hour local-time slot (which may still be in progress).
+We follow the original slot alignment to derive `oggi` totals using only
+bins assigned to the **current local calendar date**, and the latest
+individual two-hour bin. The cloud is polled **every 2 hours** and once
+on startup; all four values are published as kWh.
+
+Sensors: Gas riscaldamento oggi, Gas ACS oggi, Gas riscaldamento fascia
+bioraria, Gas ACS fascia bioraria. The previous-month entities introduced
+in 0.7.0 are no longer loaded. Their orphaned entity-registry entries may
+be removed manually; this does NOT rename or overwrite old recorder history.
+The original integration remains completely untouched.
+
+These are estimates of cloud reporting periods, not real-time gas meter
+readings. Ariston may update its latest bucket with delay; values should
+be compared against the previous integration before energy accounting.
+The current-day total resets at midnight and the two-hour bucket resets
+when its timeslot changes. Both deliberately lack a TOTAL_INCREASING state
+class and MUST NOT be added as lifetime consumption sensors to the Energy
+Dashboard. Existing Recorder and statistics are unchanged.
+
+The Home Assistant Calendar remains read-only as a representation of the
+stored Cube S weekly programme. The Schedule integration is a user-managed
+helper and cannot itself push edits back to the Cube S, so we do not create
+a competing schedule helper. Editable weekly programmes require a verified
+Ariston cloud write endpoint.
