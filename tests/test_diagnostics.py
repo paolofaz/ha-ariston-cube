@@ -247,3 +247,21 @@ def test_web_portal_http_status_is_safely_reported():
     assert diag.safe_dhw_comfort_menu(WebPortalAuthError("secret_payload")) == {
         "status": "non_disponibile", "error_type": "WebPortalAuthError"
     }
+
+
+
+def test_comfort_unexpected_schema_diagnostic_is_private():
+    from _ariston_cube_diag_test.web_portal import WebPortalComfortShapeError
+    exc = WebPortalComfortShapeError(
+        {"secret_username": "PERSONAL"},
+        [{"value": 0.0, "text": "PRIVATE"}, {"value": "2", "text": "secret"}],
+    )
+    result = diag.safe_dhw_comfort_menu(exc)
+    assert result == {
+        "status": "formato_valore_sconosciuto",
+        "value_kind": "dict",
+        "dropdown_option_count": 2,
+        "dropdown_option_value_kinds": ["float", "str"],
+    }
+    assert "PERSONAL" not in repr(result)
+    assert "PRIVATE" not in repr(result)
