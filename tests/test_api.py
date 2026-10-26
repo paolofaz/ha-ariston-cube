@@ -464,3 +464,19 @@ def test_weekly_read_reauthenticates_once_after_unauthorized_get():
     run(scenario())
     assert sum("/accounts/login" in url for _, url, _ in session.calls) == 2
     assert sum("/timeProgs/" in url for _, url, _ in session.calls) == 2
+
+
+
+def test_last_month_energy_account_get_only():
+    response = {"LastMonth": [{"gas": 123}, {"gas": 42}]}
+    session = Session(
+        Response({"token": "token"}),
+        Response(response),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        assert await client.async_read_energy_account("GW123") == response
+    run(scenario())
+    assert session.calls[-1][0] == "GET"
+    assert session.calls[-1][1].endswith("/reports/GW123/energyAccount")
+    assert not any("/set?" in url for _, url, _ in session.calls)

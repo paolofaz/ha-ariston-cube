@@ -3,11 +3,12 @@
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
-from homeassistant.const import UnitOfTemperature, UnitOfPressure
+from homeassistant.const import UnitOfTemperature, UnitOfPressure, UnitOfEnergy
 
 from .entity import AristonEntity
 from .model import as_temperature
 from .schedule_coordinator import get_or_create_weekly_coordinator
+from .gas_coordinator import AristonGasCoordinator
 from .weekly_program import daily_description
 
 DESCRIPTIONS = (
@@ -62,7 +63,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
     schedule = get_or_create_weekly_coordinator(hass, entry)
     entities = [AristonTemperature(coordinator, description) for description in DESCRIPTIONS]
     entities.append(AristonWeeklySchedule(schedule))
+    gas = AristonGasCoordinator(hass, coordinator)
+    entities.extend([
+        AristonLastMonthGas(gas, "heating", "heating_gas_last_month"),
+        AristonLastMonthGas(gas, "dhw", "dhw_gas_last_month"),
+    ])
     async_add_entities(entities)
+    entry.async_create_background_task(
+        hass, gas.async_refresh(), "Ariston Cube monthly gas initial read"
+    )
 
 
 class AristonTemperature(AristonEntity, SensorEntity):
@@ -133,6 +142,30 @@ class AristonWeeklySchedule(AristonEntity, SensorEntity):
                 for day, slices in data["days"].items()
             },
         }
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.native_value is not None
+
+
+
+class AristonLastMonthGas(AristonEntity, SensorEntity):
+    """A previous-calendar-month report, never a lifetime gas counter."""
+
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:fire"
+    # Intentionally NO TOTAL_INCREASING or TOTAL state class: LastMonth is a
+    # replaceable period report. Do not auto-ingest into the Energy dashboard.
+
+    def __init__(self, coordinator, report_key: str, translation_key: str):
+        super().__init__(coordinator, f"gas_last_month_{report_key}")
+        self._attr_translation_key = translation_key
+        self.report_key = report_key
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        return data.get(self.report_key) if data else None
 
     @property
     def available(self) -> bool:

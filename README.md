@@ -236,3 +236,20 @@ intervals using Home Assistant's local timezone. The sensor and calendar
 share exactly one cloud poller (every 3 hours). Neither entity alters the
 weekly plan. Event editing is deliberately unavailable: no verified mobile
 API write endpoint/payload for ChZn1 has been established.
+
+
+## Previous-month heating and DHW gas reports (0.7.0)
+The same integration includes two new independent **period-specific** sensors:
+`Gas riscaldamento mese scorso` and `Gas ACS mese scorso`. The upstream
+GALEVO client maps the first/second entries in
+`energyAccount.LastMonth` to heating/DHW gas and describes that account
+report as **kWh**. They are fetched with one read-only request every 6 hours
+and the sensors are unavailable when no valid report exists.
+
+They are informational and **NOT cumulative meters**: neither has
+`TOTAL_INCREASING` or `TOTAL` state class, and neither is automatically
+added to Home Assistant's Energy Dashboard. Verify their numeric values
+against the existing Ariston integration before treating them as finalized.
+The existing Recorder entity IDs/statistics are not changed or migrated.
+Gas volume (Smc/m³) requires separate unit validation and conversion, so
+this release does not pretend these are cubic meters.

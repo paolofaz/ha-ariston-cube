@@ -307,3 +307,25 @@ class AristonClient:
                         raise
                     await self.async_login()
             raise AristonAuthError("Weekly programme authentication failed")
+
+
+
+    async def async_read_energy_account(self, plant_id: str) -> dict[str, Any]:
+        """Read last-month gas totals; never request a write endpoint."""
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/reports/{plant_id}/energyAccount"
+            for attempt in range(2):
+                try:
+                    result = await self._request("GET", path)
+                    if not isinstance(result, dict):
+                        raise AristonResponseError("Invalid energy account response")
+                    return result
+                except AristonAuthError:
+                    self._token = None
+                    self._features.clear()
+                    if attempt:
+                        raise
+                    await self.async_login()
+            raise AristonAuthError("Energy report authorization failed")

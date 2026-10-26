@@ -52,6 +52,12 @@
       },
       "heating_pressure": {
         "name": "Pressione circuito riscaldamento"
+      },
+      "heating_gas_last_month": {
+        "name": "Gas riscaldamento mese scorso"
+      },
+      "dhw_gas_last_month": {
+        "name": "Gas ACS mese scorso"
       }
     },
     "binary_sensor": {

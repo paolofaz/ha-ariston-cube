@@ -52,6 +52,12 @@
       },
       "heating_pressure": {
         "name": "Heating circuit pressure"
+      },
+      "heating_gas_last_month": {
+        "name": "Heating gas last month"
+      },
+      "dhw_gas_last_month": {
+        "name": "Hot water gas last month"
       }
     },
     "binary_sensor": {
