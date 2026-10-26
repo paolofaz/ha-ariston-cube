@@ -69,3 +69,19 @@ def test_label_mapping():
          "options": [0, 1], "optTexts": ["Manual", "Time program"]},
     ]})
     assert values["ZoneMode"]["label"] == "Time program"
+
+
+
+def test_optional_boiler_read_request_identifiers():
+    request = make_main_request({"zones": [{"num": 1}]})
+    for code in ("ChFlowTemp", "ChFlowSetpointTemp", "OutsideTemp",
+                 "HeatingCircuitPressure"):
+        assert {"id": code, "zn": 0} in request["items"]
+    parsed = parse_main_data({"items": [
+        {"id": "ChFlowTemp", "zone": 0, "value": 49.0},
+        {"id": "ChFlowSetpointTemp", "zone": 0, "value": 51.0},
+        {"id": "OutsideTemp", "zone": 0, "value": 13.0},
+        {"id": "HeatingCircuitPressure", "zone": 0, "value": 1.3, "unit": "bar"},
+    ]})
+    assert len(parsed) == 4
+    assert parsed["HeatingCircuitPressure"]["unit"] == "bar"

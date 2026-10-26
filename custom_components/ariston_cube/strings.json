@@ -40,6 +40,18 @@
       },
       "weekly_program": {
         "name": "Cube S weekly programme"
+      },
+      "flow_temperature": {
+        "name": "Heating flow temperature"
+      },
+      "flow_setpoint": {
+        "name": "Heating flow target"
+      },
+      "outside_temperature": {
+        "name": "Outdoor sensor temperature"
+      },
+      "heating_pressure": {
+        "name": "Heating circuit pressure"
       }
     },
     "binary_sensor": {

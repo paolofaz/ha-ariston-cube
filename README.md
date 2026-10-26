@@ -213,3 +213,16 @@ this endpoint. We export its schema and a strict recognized label for
 consumption readings are not exported. The unit label alone does **not**
 prove individual report codes are billed gas or a lifetime meter. The
 electricity unit and origin still need independent confirmation.
+
+
+## Additional optional boiler measurements (0.7.0)
+Added device-data requests for **ChFlowTemp** (actual heating flow),
+**ChFlowSetpointTemp** (heating flow target — the old integration's
+`ch_flow_temperature`), **OutsideTemp** (outside probe), and
+**HeatingCircuitPressure** (reported pressure in bar only).
+
+Each sensor is unavailable if the cloud omits its item. Outdoor values equal
+to the provided maximum are treated as an unconnected-sensor sentinel, as
+in the upstream GALEVO client. Pressure values without an explicit 'bar'
+unit are not represented as bar. These additions are read-only and do not
+alter the existing five sensor IDs. No guessed DHW flame is exposed.

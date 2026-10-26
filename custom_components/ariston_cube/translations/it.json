@@ -40,6 +40,18 @@
       },
       "weekly_program": {
         "name": "Programma settimanale Cube S"
+      },
+      "flow_temperature": {
+        "name": "Temperatura di mandata"
+      },
+      "flow_setpoint": {
+        "name": "Setpoint mandata riscaldamento"
+      },
+      "outside_temperature": {
+        "name": "Temperatura sonda esterna"
+      },
+      "heating_pressure": {
+        "name": "Pressione circuito riscaldamento"
       }
     },
     "binary_sensor": {

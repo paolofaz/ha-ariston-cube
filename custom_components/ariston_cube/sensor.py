@@ -3,7 +3,7 @@
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import UnitOfTemperature, UnitOfPressure
 
 from .entity import AristonEntity
 from .model import as_temperature
@@ -27,6 +27,31 @@ DESCRIPTIONS = (
         key="DhwTemp", translation_key="dhw_setpoint",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+
+    SensorEntityDescription(
+        key="ChFlowTemp", translation_key="flow_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="ChFlowSetpointTemp", translation_key="flow_setpoint",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="OutsideTemp", translation_key="outside_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="HeatingCircuitPressure", translation_key="heating_pressure",
+        native_unit_of_measurement=UnitOfPressure.BAR,
+        device_class=SensorDeviceClass.PRESSURE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
 )
@@ -54,6 +79,30 @@ class AristonTemperature(AristonEntity, SensorEntity):
 
     @property
     def native_value(self):
+        if self.entity_description.key == "HeatingCircuitPressure":
+            record = self.record
+            if record is None or record.get("unit") not in ("bar", "Bar", "BAR"):
+                return None
+            result = as_temperature(record)
+            return result if result is not None and 0 <= result <= 10 else None
+        if self.entity_description.key == "OutsideTemp":
+            # Cloud often returns a sentinel equal to its max when no physical
+            # outside probe is present; do not present that as real weather.
+            record = self.record
+            value = as_temperature(record)
+            if value is None or value < -60 or value > 70:
+                return None
+            max_value = record.get("max") if record else None
+            if max_value is not None:
+                try:
+                    if value == float(max_value):
+                        return None
+                except (ValueError, TypeError, OverflowError):
+                    return None
+            return value
+        if self.entity_description.key in ("ChFlowTemp", "ChFlowSetpointTemp"):
+            value = as_temperature(self.record)
+            return value if value is not None and 0 <= value <= 120 else None
         return as_temperature(self.record)
 
     @property
