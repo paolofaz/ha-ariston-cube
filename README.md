@@ -369,3 +369,23 @@ on this physical boiler.
 
 Previously working mobile controls, Recorder data and old Ariston
 integration remain independent and unchanged.
+
+
+## 0.8.1 — R2 login correction from field diagnostics
+
+Home Assistant 2026.10.4 field diagnostics showed web authorization failing
+already on the first **GET /R2/Account/Login**, before reading the Smc report
+or the U6_9_2 ACS Comfort switch. The original 0.8.0 web client disabled
+redirects, rejecting common login-form redirects before receiving HTML.
+
+Version 0.8.1 follows bounded login-form redirects, verifies the final
+host belongs to the original official Ariston domain, accepts the
+antiforgery hidden input regardless of attribute ordering, and uses its
+own Home Assistant managed cookie session, separate from mobile API calls.
+A failed form GET/POST now exposes only its numeric HTTP status in
+`comfort_acs_menu_probe` within on-demand diagnostics.
+
+The two features still depend on the live R2 web endpoint accepting this
+specific account; tests alone cannot establish that. In case of a continuing
+403/404/5xx, do not repeatedly retry the Comfort switch or invent Smc from
+the kWh series. Old mobile sensors/controls and Recorder are left intact.
