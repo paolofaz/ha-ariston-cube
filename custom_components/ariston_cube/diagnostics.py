@@ -151,7 +151,7 @@ def safe_dhw_comfort_menu(raw: Any) -> dict[str, str]:
         # Include only a numeric HTTP status from a strictly known error.
         # Never serialize a raw exception, URL, login HTML or credentials.
         import re
-        match = re.fullmatch(r"Web login (?:form|POST) HTTP (\\d{3})", str(raw))
+        match = re.fullmatch(r"Web login (?:form|POST) HTTP (\d{3})", str(raw))
         safe = {"status": "non_disponibile", "error_type": type(raw).__name__}
         if match:
             safe["http_status"] = int(match.group(1))
