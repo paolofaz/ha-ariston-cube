@@ -175,3 +175,13 @@ def test_web_form_http_error_provides_status_and_no_secret():
     assert "MY_USERNAME" not in str(exc.value)
     assert "MY_PASSWORD" not in str(exc.value)
     assert len(session.calls) == 1
+
+
+
+def test_web_antiforgery_input_attribute_order_independent():
+    reversed_form = '<input value="abc123" type="hidden" name="__RequestVerificationToken">'
+    session = Session(Reply(reversed_form), Reply({"ok": True}), Reply(menu(0)))
+    assert asyncio.run(
+        web.AristonWebPortal(session, "u", "p").async_read_comfort("GW123")
+    )["value"] == 0
+    assert session.cookie_jar.cookies[0]["__formRequestVerificationToken"] == "abc123"
