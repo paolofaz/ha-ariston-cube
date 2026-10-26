@@ -35,11 +35,15 @@ class Response:
     async def read(self):
         return b""
 
+    async def text(self):
+        return self.payload if isinstance(self.payload, str) else ""
+
 
 class Session:
     def __init__(self, *responses):
         self.responses = list(responses)
         self.calls = []
+        self.cookie_jar = types.SimpleNamespace(update_cookies=lambda *_args, **_kwargs: None)
 
     def request(self, method, url, **kwargs):
         self.calls.append((method, url, kwargs))
@@ -48,7 +52,8 @@ class Session:
 
 def test_authentication_and_read_contract():
     session = Session(
-        Response(),  # login
+        Response(path="/R2/Account/Login"),  # preflight
+        Response('{"ok":true}', path="/R2/Home"),  # login
         Response([{"gwId": "GW123", "name": "Cube"}]),  # plants
         Response({"zones": [{"num": 1}]}),  # features
         Response({"items": [{"id": "ZoneMeasuredTemp", "zone": 1, "value": 21}]}),
@@ -61,9 +66,10 @@ def test_authentication_and_read_contract():
         assert result["items"][0]["value"] == 21
 
     asyncio.run(test())
-    assert session.calls[0][0] == "POST"
-    assert "/R2/Account/Login" in session.calls[0][1]
-    body = session.calls[3][2]["json"]
+    assert session.calls[0][0] == "GET"
+    assert session.calls[1][0] == "POST"
+    assert session.calls[2][2]["headers"]["X-Requested-With"] == "XMLHttpRequest"
+    body = session.calls[4][2]["json"]
     assert body["useCache"] is False
     assert {"id": "ZoneMeasuredTemp", "zn": 1} in body["items"]
     assert not any("/temperatures" in url for _, url, _ in session.calls)
@@ -71,9 +77,11 @@ def test_authentication_and_read_contract():
 
 def test_expired_session_reauthenticates_only_once():
     session = Session(
-        Response(),  # login
+        Response(path="/R2/Account/Login"),  # preflight
+        Response('{"ok":true}', path="/R2/Home"),  # login
         Response(status=401),  # features -> unauthorized
-        Response(),  # login again
+        Response(path="/R2/Account/Login"),  # preflight again
+        Response('{"ok":true}', path="/R2/Home"),  # login again
         Response({"zones": [{"num": 1}]}),
         Response({"items": []}),
     )
@@ -88,9 +96,11 @@ def test_expired_session_reauthenticates_only_once():
 
 def test_expired_session_login_redirect_raises_auth_error():
     session = Session(
-        Response(),
+        Response(path="/R2/Account/Login"),
+        Response('{"ok":true}', path="/R2/Home"),
         Response(payload=None, path="/R2/Account/Login"),
-        Response(),
+        Response(path="/R2/Account/Login"),
+        Response('{"ok":true}', path="/R2/Home"),
         Response(payload=None, path="/R2/Account/Login"),
     )
 
@@ -102,4 +112,32 @@ def test_expired_session_login_redirect_raises_auth_error():
             return
         assert False, "Expected auth error after retry"
 
+    asyncio.run(test())
+
+
+def test_denied_login_is_not_accepted():
+    session = Session(
+        Response(path="/R2/Account/Login"),
+        Response('{"ok":false}', path="/R2/Account/Login"),
+    )
+    async def test():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_login()
+        except api.AristonAuthError:
+            return
+        assert False, "Expected rejected login"
+    asyncio.run(test())
+
+
+def test_preflight_403_is_not_mislabeled_bad_password():
+    session = Session(Response(status=403, path="/R2/Account/Login"))
+    async def test():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_login()
+        except api.AristonConnectionError as exc:
+            assert "login_page" in str(exc)
+            return
+        assert False, "Expected cloud connection error"
     asyncio.run(test())

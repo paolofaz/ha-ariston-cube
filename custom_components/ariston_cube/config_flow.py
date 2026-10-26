@@ -48,14 +48,18 @@ class AristonCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if len(self._plants) == 1:
                         return await self._create_for_plant(self._plants[0])
                     return await self.async_step_plant()
-            except AristonAuthError:
+            except AristonAuthError as exc:
+                _LOGGER.warning("Ariston authentication rejected: %s", exc)
                 errors["base"] = "invalid_auth"
-            except AristonConnectionError:
+            except AristonConnectionError as exc:
+                _LOGGER.warning("Ariston cloud connection issue: %s", exc)
                 errors["base"] = "cannot_connect"
-            except AristonResponseError:
+            except AristonResponseError as exc:
+                _LOGGER.warning("Unexpected Ariston response: %s", exc)
                 errors["base"] = "invalid_response"
-            finally:
-                session.detach()
+            except Exception:
+                _LOGGER.exception("Unexpected Ariston setup failure")
+                errors["base"] = "unknown"
         return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
 
     async def async_step_plant(self, user_input=None):
