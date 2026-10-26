@@ -155,3 +155,23 @@ def test_web_metering_reads_actual_as_physical_unit():
         "features": {"zones": [{"id": 1}]}, "hasCooling": False
     }
     assert "/R2/PlantMetering/GetData/GW123" in session.calls[-1][1]
+
+
+
+def test_login_form_follows_safe_redirect_chain():
+    session = Session(Reply(FORM), Reply({"ok": True}), Reply(menu(0)))
+    client = web.AristonWebPortal(session, "user", "pwd")
+    assert asyncio.run(client.async_read_comfort("GW123"))["value"] == 0
+    assert session.calls[0][2]["allow_redirects"] is True
+    assert session.calls[0][2]["max_redirects"] == 5
+    assert session.calls[1][2]["allow_redirects"] is False
+
+
+def test_web_form_http_error_provides_status_and_no_secret():
+    session = Session(Reply("not available", status=403))
+    with pytest.raises(web.WebPortalAuthError, match="Web login form HTTP 403") as exc:
+        asyncio.run(web.AristonWebPortal(session, "MY_USERNAME", "MY_PASSWORD")
+                    .async_read_comfort("GW123"))
+    assert "MY_USERNAME" not in str(exc.value)
+    assert "MY_PASSWORD" not in str(exc.value)
+    assert len(session.calls) == 1
