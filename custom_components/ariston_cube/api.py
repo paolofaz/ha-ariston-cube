@@ -1,8 +1,7 @@
-"""Read-only async client for the legacy Ariston NET cloud API.
+"""Minimal read-only client for the Ariston NET mobile cloud API.
 
-The login sequence intentionally matches the historical requests.Session
-client: POST credentials, then GET the discovered gateways. No speculative
-preflight GET, CSRF cookie manipulation or nonstandard request headers.
+Uses /api/v2/accounts/login and ar.authToken, not the old /R2 web login.
+Device-setting endpoints are deliberately absent.
 """
 
 from __future__ import annotations
@@ -16,28 +15,29 @@ import aiohttp
 from .const import BASE_URL
 from .model import make_main_request, parse_plants
 
+MOBILE_USER_AGENT = "RestSharp/106.11.7.0"
+
 
 class AristonError(Exception):
-    """Base class for expected API failures."""
+    """Base error (no tokens, passwords or personal identifiers)."""
 
 
 class AristonAuthError(AristonError):
-    """Credentials rejected or session expired."""
+    """Token invalid or login denied."""
 
 
 class AristonConnectionError(AristonError):
-    """Cloud network or HTTP availability problem."""
+    """Temporary network/cloud service error."""
 
 
 class AristonResponseError(AristonError):
-    """Cloud returned an unsupported response."""
+    """Cloud API response does not match the expected contract."""
 
 
-
-def _phase(method: str, path: str) -> str:
-    """Never expose gateway IDs or credentials in diagnostics."""
-    if path.startswith("/R2/Account/Login"):
-        return "login_submit"
+def _phase(path: str) -> str:
+    """Use non-sensitive request stage names for logs."""
+    if path == "/api/v2/accounts/login":
+        return "mobile_login"
     if "/plants/lite" in path:
         return "plant_discovery"
     if "/features?" in path:
@@ -48,96 +48,71 @@ def _phase(method: str, path: str) -> str:
 
 
 class AristonClient:
-    """Authenticated, cookie-backed async reader for one Ariston account."""
+    """Async read-only client with per-account token and feature cache."""
 
     def __init__(self, session: aiohttp.ClientSession, username: str, password: str) -> None:
         self._session = session
         self._username = username
         self._password = password
-        self._authenticated = False
+        self._token: str | None = None
         self._features: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
 
-
     async def _request(
-        self, method: str, path: str, *, json_body: dict[str, Any] | None = None,
-        expect_json: bool = True,
+        self, method: str, path: str, *,
+        json_body: dict[str, Any] | None = None,
     ) -> Any:
-        phase = _phase(method, path)
+        stage = _phase(path)
+        headers = {
+            "User-Agent": MOBILE_USER_AGENT,
+            "ar.authToken": self._token or "",
+        }
         try:
             async with self._session.request(
-                method, BASE_URL + path, json=json_body,
+                method, BASE_URL + path, json=json_body, headers=headers,
                 timeout=aiohttp.ClientTimeout(total=25), allow_redirects=True,
             ) as response:
-                if response.status in (401, 403):
-                    raise AristonAuthError(
-                        f"Ariston HTTP {response.status} at {phase}"
-                    )
+                if response.status in (401, 403, 405):
+                    raise AristonAuthError(f"Ariston HTTP {response.status} at {stage}")
                 if response.status in (408, 425, 429) or response.status >= 500:
-                    raise AristonConnectionError(
-                        f"Ariston HTTP {response.status} at {phase}"
-                    )
+                    raise AristonConnectionError(f"Ariston HTTP {response.status} at {stage}")
                 if response.status >= 400:
-                    raise AristonResponseError(
-                        f"Ariston HTTP {response.status} at {phase}"
-                    )
-                if expect_json and "/account/login" in response.url.path.lower():
-                    raise AristonAuthError(f"Redirected to login at {phase}")
-                if expect_json:
-                    try:
-                        return await response.json(content_type=None)
-                    except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError) as exc:
-                        raise AristonResponseError(
-                            f"Ariston returned non-JSON content at {phase}"
-                        ) from exc
-                return {"path": response.url.path, "body": await response.text()}
+                    raise AristonResponseError(f"Ariston HTTP {response.status} at {stage}")
+                if "/account/login" in response.url.path.lower():
+                    raise AristonAuthError(f"Redirected to web login at {stage}")
+                try:
+                    return await response.json(content_type=None)
+                except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError) as exc:
+                    raise AristonResponseError(f"Non-JSON cloud reply at {stage}") from exc
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise AristonConnectionError(
-                f"Ariston {type(exc).__name__} at {phase}"
+                f"Ariston {type(exc).__name__} at {stage}"
             ) from exc
 
     async def async_login(self) -> None:
-        """POST login exactly as in the historically working cloud client."""
+        """Request an API token; never expose it in errors or logs."""
         reply = await self._request(
-            "POST", "/R2/Account/Login?returnUrl=%2FR2%2FHome",
-            json_body={
-                "email": self._username,
-                "password": self._password,
-                "rememberMe": False,
-                "language": "English_Us",
-            },
-            expect_json=False,
+            "POST", "/api/v2/accounts/login",
+            json_body={"usr": self._username, "pwd": self._password},
         )
-        body = reply["body"].strip()
-        if body.startswith("{"):
-            try:
-                result = json.loads(body)
-            except json.JSONDecodeError as exc:
-                raise AristonResponseError("Invalid JSON login reply") from exc
-            if not isinstance(result, dict):
-                raise AristonResponseError("Unexpected JSON login reply")
-            if result.get("ok") is False or result.get("success") is False:
-                raise AristonAuthError("Ariston rejected the login (ok=false)")
-        elif "/account/login" in reply["path"].lower() and (
-            "<html" in body.lower() or "<form" in body.lower()
-        ):
-            raise AristonAuthError("Ariston returned the login form")
-        # Login is only fully validated by the subsequent plant discovery.
-        self._authenticated = True
+        if not isinstance(reply, dict):
+            raise AristonResponseError("Unexpected mobile login reply")
+        token = reply.get("token")
+        if isinstance(token, str) and token:
+            self._token = token
+            return
+        if reply.get("ok") is False or reply.get("success") is False:
+            raise AristonAuthError("Mobile login rejected")
+        raise AristonResponseError("Mobile login response without token")
 
     async def async_list_plants(self) -> list[dict[str, str]]:
-        """Fetch account plant IDs; an empty list is not a login failure."""
-        if not self._authenticated:
+        """Fetch gateways using the mobile auth token."""
+        if not self._token:
             await self.async_login()
         try:
-            result = await self._request("GET", "/api/v2/remote/plants/lite")
-            return parse_plants(result)
+            return parse_plants(await self._request("GET", "/api/v2/remote/plants/lite"))
         except ValueError as exc:
-            raise AristonResponseError("Invalid plants payload") from exc
-
-    async def _ensure_login(self) -> None:
-        if not self._authenticated:
-            await self.async_login()
+            raise AristonResponseError("Unexpected plant list response") from exc
 
     async def _load_features(self, plant_id: str) -> dict[str, Any]:
         if plant_id not in self._features:
@@ -145,25 +120,29 @@ class AristonClient:
                 "GET", f"/api/v2/remote/plants/{plant_id}/features?eagerMode=True"
             )
             if not isinstance(features, dict):
-                raise AristonResponseError("Invalid device features")
+                raise AristonResponseError("Unexpected device features")
             self._features[plant_id] = features
         return self._features[plant_id]
 
     async def async_read_main(self, plant_id: str) -> dict[str, Any]:
-        """Read the selected plant, retrying authentication once if necessary."""
+        """Read status; refresh expired token at most once."""
         async with self._lock:
-            await self._ensure_login()
+            if not self._token:
+                await self.async_login()
             for attempt in range(2):
                 try:
                     features = await self._load_features(plant_id)
-                    return await self._request(
+                    result = await self._request(
                         "POST", f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si",
                         json_body=make_main_request(features),
                     )
+                    if not isinstance(result, dict):
+                        raise AristonResponseError("Unexpected dataItems reply")
+                    return result
                 except AristonAuthError:
-                    self._authenticated = False
+                    self._token = None
                     self._features.clear()
                     if attempt:
                         raise
                     await self.async_login()
-            raise AristonAuthError("Unable to authenticate")
+            raise AristonAuthError("Token refresh failed")
