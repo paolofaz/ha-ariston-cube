@@ -1,12 +1,13 @@
-"""Persistent, period-aware ledger for normalized gas volume reported in Smc.
+"""Restart-safe Ariston Smc accounting across the vendor's 02:00 report reset.
 
-No guessed gas calorific factor; the dashboard's m³ represent the exact
-numerical standard cubic metres reported in asPhysicalUnit.
+Cloud CurrentDay stays on the *previous* calendar day until 02:00.
+At midnight its last 22:00-00:00 bucket becomes available, before
+the 02:00 00:00-02:00 bucket starts the new CurrentDay.
 
-Treat corrections as signed differences using HA's state_class TOTAL, not as
-fictitious new usage or lifetime meter resets. Only advertise statistics once
-the gateway has demonstrated it can supply a full PreviousDay histogram,
-because the 22:00-00:00 bucket is not available from CurrentDay after 02:00.
+Each usage/day/2-hour-slot is stored independently; equal adjacent
+usage amounts are counted separately, while rereads of the same slot
+are no-ops. Corrections to the same slot apply only the signed delta.
+The storage checkpoint is saved BEFORE notifying Home Assistant.
 """
 
 from __future__ import annotations
@@ -18,7 +19,8 @@ from typing import Any
 
 _SERIES = {"Heating": "heating", "Dhw": "dhw"}
 _PERIODS = ("PreviousDay", "CurrentDay")
-_VERSION = 2
+_VERSION = 3
+_SLOT_KEYS = {str(i) for i in range(12)}
 
 
 def empty_state() -> dict[str, Any]:
@@ -34,47 +36,43 @@ def empty_state() -> dict[str, Any]:
 
 
 def valid_state(raw: Any) -> dict[str, Any] | None:
-    """Fail closed on malformed persisted totals and ledger schema."""
+    """Never silently reset an inconsistent or incompatible stored ledger."""
     if not isinstance(raw, dict) or raw.get("version") != _VERSION:
         return None
-    totals = raw.get("totals")
-    if not isinstance(totals, dict):
+    totals, days = raw.get("totals"), raw.get("days")
+    if not isinstance(totals, dict) or not isinstance(days, dict) or len(days) > 8:
         return None
-    for key in _SERIES.values():
-        value = totals.get(key)
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
+    for kind in _SERIES.values():
+        value = totals.get(kind)
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value < 0):
             return None
-        if not math.isfinite(value) or value < 0:
-            return None
-    days = raw.get("days")
-    if not isinstance(days, dict) or len(days) > 8:
-        return None
-    for day, values in days.items():
+    for key, kinds in days.items():
         try:
-            if not isinstance(day, str) or date.fromisoformat(day).isoformat() != day:
+            if not isinstance(key, str) or date.fromisoformat(key).isoformat() != key:
                 return None
         except ValueError:
             return None
-        if not isinstance(values, dict):
+        if not isinstance(kinds, dict):
             return None
-        for key, slots in values.items():
-            if key not in _SERIES.values() or not isinstance(slots, dict):
+        for kind, slots in kinds.items():
+            if kind not in _SERIES.values() or not isinstance(slots, dict):
                 return None
-            for index, value in slots.items():
-                if index not in {str(i) for i in range(12)}:
-                    return None
-                if (isinstance(value, bool) or not isinstance(value, (int, float))
+            for slot, value in slots.items():
+                if (slot not in _SLOT_KEYS
+                        or isinstance(value, bool)
+                        or not isinstance(value, (int, float))
                         or not math.isfinite(value) or value < 0):
                     return None
-    if not isinstance(raw.get("previous_day_verified"), bool):
-        return None
-    if not isinstance(raw.get("continuity_lost"), bool):
+    if (not isinstance(raw.get("previous_day_verified"), bool)
+            or not isinstance(raw.get("continuity_lost"), bool)):
         return None
     for field in ("tracking_start", "closed_through"):
-        val = raw.get(field)
-        if val is not None:
+        value = raw.get(field)
+        if value is not None:
             try:
-                if not isinstance(val, str) or date.fromisoformat(val).isoformat() != val:
+                if (not isinstance(value, str)
+                        or date.fromisoformat(value).isoformat() != value):
                     return None
             except ValueError:
                 return None
@@ -82,123 +80,133 @@ def valid_state(raw: Any) -> dict[str, Any] | None:
 
 
 def _rows(report: Any, now: datetime) -> list[tuple[str, str, int, float]]:
-    """Parse only explicit completed 2h slots; reject duplicated series."""
+    """Retrieve completed report buckets keyed by actual calendar date."""
     if now.tzinfo is None or now.utcoffset() is None or not isinstance(report, dict):
         return []
     physical = report.get("asPhysicalUnit")
     histogram = physical.get("histogramData") if isinstance(physical, dict) else None
     if not isinstance(histogram, list):
         return []
+
+    # Vendor publication day switches at 02:00, NOT at 00:00.
+    report_day = now.date() - timedelta(days=1) if now.hour < 2 else now.date()
     rows: list[tuple[str, str, int, float]] = []
     for period in _PERIODS:
-        day = now.date() if period == "CurrentDay" else now.date() - timedelta(days=1)
-        # CurrentDay index 0 (00-02) becomes complete at 02:00; previous day
-        # allows all 12 buckets, including 22:00-00:00.
-        completed = min(12, now.hour // 2) if period == "CurrentDay" else 12
-        for raw_name, kind in _SERIES.items():
-            matches = [
+        day = report_day - timedelta(days=1) if period == "PreviousDay" else report_day
+        # The entire yesterday histogram is completed. CurrentDay contains
+        # 12 completed slots from 00:00-02:00, but only hour//2 thereafter.
+        completed = (12 if (period == "PreviousDay" or now.hour < 2)
+                     else min(12, now.hour // 2))
+        for cloud_name, kind in _SERIES.items():
+            matching = [
                 item for item in histogram
                 if isinstance(item, dict)
+                and item.get("series") == cloud_name
                 and item.get("period") == period
-                and item.get("series") == raw_name
             ]
-            if len(matches) != 1:
+            if len(matching) != 1:
                 continue
-            samples = matches[0].get("items")
+            samples = matching[0].get("items")
             if not isinstance(samples, list) or len(samples) != 12:
                 continue
-            valid: list[float] = []
+            values = []
             for sample in samples:
                 value = sample.get("y") if isinstance(sample, dict) else None
-                if (isinstance(value, bool) or not isinstance(value, (int, float))
-                        or not math.isfinite(value) or value < 0 or value > 100000):
-                    valid = []
+                if (isinstance(value, bool)
+                        or not isinstance(value, (int, float))
+                        or not math.isfinite(value) or not 0 <= value < 100000):
+                    values = []
                     break
-                valid.append(float(value))
-            if len(valid) != 12:
+                values.append(round(float(value), 6))
+            if len(values) != 12:
                 continue
-            for idx, value in enumerate(valid[:completed]):
-                rows.append((day.isoformat(), kind, idx, round(value, 6)))
+            for index, value in enumerate(values[:completed]):
+                rows.append((day.isoformat(), kind, index, value))
     return rows
 
 
 def apply_report(
     original: dict[str, Any], report: Any, now: datetime,
 ) -> tuple[dict[str, Any], bool]:
-    """Compute new snapshot; caller MUST persist it before publishing state."""
+    """Return candidate ledger; caller must persist before publishing."""
     state = valid_state(original)
     if state is None:
-        raise ValueError("Invalid stored gas ledger")
+        raise ValueError("Invalid stored Smc gas ledger")
     rows = _rows(report, now)
     if not rows:
         return state, False
+
     changed = False
-    old_days = state["days"]
-    for day, kind, idx, value in rows:
-        slots = old_days.setdefault(day, {}).setdefault(kind, {})
-        key = str(idx)
-        old = slots.get(key)
-        if old is not None and old == value:
+    days = state["days"]
+    for day, kind, idx, amount in rows:
+        slots = days.setdefault(day, {}).setdefault(kind, {})
+        slot = str(idx)
+        old = slots.get(slot)
+        if old == amount:
             continue
-        delta = value - (old if old is not None else 0.0)
-        state["totals"][kind] = round(state["totals"][kind] + delta, 6)
-        # Reductions are valid cloud corrections; "total" (not
-        # "total_increasing") lets HA reduce the statistic once.
-        if state["totals"][kind] < 0:
-            raise ValueError("Negative corrected meter total")
-        slots[key] = value
+        delta = amount - (old if old is not None else 0.0)
+        updated_total = round(state["totals"][kind] + delta, 6)
+        if updated_total < 0:
+            raise ValueError("Invalid negative gas meter after correction")
+        state["totals"][kind] = updated_total
+        slots[slot] = amount
         changed = True
-    previous = (now.date() - timedelta(days=1)).isoformat()
-    if state["tracking_start"] is None and state["days"]:
-        state["tracking_start"] = min(state["days"])
+
+    if state["tracking_start"] is None and days:
+        state["tracking_start"] = min(days)
         changed = True
-    prev = state["days"].get(previous, {})
-    # A whole day is closed only if both gas streams include 22:00-00:00.
-    prev_complete = all(
-        len(prev.get(kind, {})) == 12 and "11" in prev.get(kind, {})
-        for kind in _SERIES.values()
+
+    # Only close a day if both usage streams contain all 12 distinct slots,
+    # in particular the midnight 22:00-00:00 slot. Never invent empty data.
+    yesterday = now.date() - timedelta(days=1)
+    completed_days = sorted(
+        date.fromisoformat(day)
+        for day, values in days.items()
+        if date.fromisoformat(day) <= yesterday
+        and all(len(values.get(kind, {})) == 12 for kind in _SERIES.values())
     )
-    if prev_complete and not state["continuity_lost"]:
-        closed = state["closed_through"]
-        if closed is None:
-            if state["tracking_start"] == previous:
-                state["closed_through"] = previous
+
+    if not state["continuity_lost"]:
+        for day in completed_days:
+            closed = state["closed_through"]
+            if closed is not None and day <= date.fromisoformat(closed):
+                continue
+            expected = (
+                date.fromisoformat(closed) + timedelta(days=1)
+                if closed is not None else date.fromisoformat(state["tracking_start"])
+            )
+            if day > expected:
+                state["continuity_lost"] = True
+                changed = True
+                break
+            if day == expected:
+                state["closed_through"] = day.isoformat()
                 state["previous_day_verified"] = True
                 changed = True
-            elif state["tracking_start"] < previous:
+
+        # At 02:00 the last cloud report is irrevocably replaced. If we
+        # cannot close yesterday from the 00:xx snapshot or a PreviousDay
+        # report, stop accounting rather than quietly omitting 22:00-00:00.
+        if now.hour >= 2 and state["tracking_start"] is not None:
+            previous = state["closed_through"]
+            if (date.fromisoformat(state["tracking_start"]) <= yesterday
+                    and (previous is None or date.fromisoformat(previous) < yesterday)):
                 state["continuity_lost"] = True
                 changed = True
-        elif closed < previous:
-            if date.fromisoformat(closed) + timedelta(days=1) == date.fromisoformat(previous):
-                state["closed_through"] = previous
-                changed = True
-            else:
-                state["continuity_lost"] = True
-                changed = True
-    elif state["closed_through"] is not None and (
-        date.fromisoformat(state["closed_through"]) + timedelta(days=1)
-        < date.fromisoformat(previous)
-    ):
-        # After a multi-day outage the portal can provide Yesterday but
-        # not days in between. Never resume a knowingly incomplete total.
-        state["continuity_lost"] = True
-        changed = True
-    # Keep this day, the previous two days and only their slot ledgers.
-    # Lifetime totals remain untouched when old slot hashes are discarded.
-    allowed_days = {(now.date() - timedelta(days=i)).isoformat() for i in range(3)}
-    for day in list(old_days):
-        if day not in allowed_days:
-            del old_days[day]
+
+    allowed = {(now.date() - timedelta(days=offset)).isoformat() for offset in range(3)}
+    for day in list(days):
+        if day not in allowed:
+            del days[day]
             changed = True
     return state, changed
 
 
 class StoredGasLedger:
-    """Small HA .storage record; only current two-hour buckets are persisted."""
+    """A small Home Assistant .storage snapshot, scoped per config entry."""
 
     def __init__(self, hass: Any, entry_id: str) -> None:
         from homeassistant.helpers.storage import Store
-
         self._store = Store(hass, _VERSION, f"ariston_cube_gas_ledger_{entry_id}")
         self._state: dict[str, Any] | None = None
 
@@ -210,17 +218,16 @@ class StoredGasLedger:
             else:
                 self._state = valid_state(raw)
                 if self._state is None:
-                    raise ValueError("Existing gas ledger invalid; refusing to reset")
+                    raise ValueError("Stored gas accounting format unsupported")
         candidate, changed = apply_report(self._state, report, now)
         if changed:
             await self._store.async_save(candidate)
         self._state = candidate
+
         yesterday = (now.date() - timedelta(days=1)).isoformat()
         if (candidate["continuity_lost"]
                 or not candidate["previous_day_verified"]
                 or candidate["closed_through"] != yesterday):
-            # Missing a closing 22:00-00:00 bucket is a real accounting gap.
-            # Do not silently bridge it or publish an incorrect sum.
             return {"heating": None, "dhw": None, "history_complete": False}
         return {
             "heating": candidate["totals"]["heating"],
