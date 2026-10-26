@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import html
 import json
+import math
 import re
 import time
 from typing import Any
@@ -56,6 +57,35 @@ class WebPortalError(Exception):
 
 class WebPortalAuthError(WebPortalError):
     """Cookie login cannot be established."""
+
+
+class WebPortalComfortShapeError(WebPortalError):
+    """Schema-only details for diagnostics; never stores raw menu values."""
+
+    def __init__(self, value: Any, options: Any) -> None:
+        super().__init__("ACS Comfort menu value format not recognized")
+        self.value_kind = type(value).__name__
+        self.option_count = len(options) if isinstance(options, list) else None
+        self.option_value_kinds = sorted({
+            type(item.get("value")).__name__
+            for item in options[:20] if isinstance(item, dict)
+        }) if isinstance(options, list) else []
+
+
+def comfort_option_code(raw: Any) -> int | None:
+    """Canonical 0/1/2 for JSON integer, decimal, or numeric text.
+
+    Never coerce bool or labels without matching the server's option list.
+    """
+    if type(raw) is int and raw in (0, 1, 2):
+        return raw
+    if type(raw) is float and math.isfinite(raw) and raw in (0.0, 1.0, 2.0):
+        return int(raw)
+    if isinstance(raw, str):
+        value = raw.strip()
+        if value in ("0", "1", "2", "0.0", "1.0", "2.0"):
+            return int(value[0])
+    return None
 
 
 class AristonWebPortal:
@@ -159,7 +189,7 @@ class AristonWebPortal:
 
     @staticmethod
     def comfort_record(data: Any) -> dict[str, Any]:
-        """Read only the exact legacy user-menu U6_9_2 parameter."""
+        """Find actual U6_9_2 option without guessing an unknown mode."""
         entries = AristonWebPortal._unwrap(data)
         if not isinstance(entries, list):
             raise WebPortalError("Unexpected ACS Comfort response")
@@ -171,15 +201,26 @@ class AristonWebPortal:
             raise WebPortalError("ACS Comfort parameter absent or duplicated")
         record = records[0]
         raw = record.get("value")
-        if type(raw) is int:
-            code = raw
-        elif isinstance(raw, str) and raw in ("0", "1", "2"):
-            code = int(raw)
-        else:
-            raise WebPortalError("Unexpected ACS Comfort value")
-        if code not in (0, 1, 2):
-            raise WebPortalError("Unsupported ACS Comfort value")
-        return {"value": code, "dropDownOptions": record.get("dropDownOptions")}
+        options = record.get("dropDownOptions")
+        code = comfort_option_code(raw)
+
+        # The legacy integration used the declared dropdown value/text pairs
+        # rather than assuming the REST response was an integer. Text matching
+        # is allowed only when it identifies exactly ONE declared 0/1/2 option.
+        if code is None and isinstance(raw, str) and isinstance(options, list):
+            matches = [
+                comfort_option_code(option.get("value"))
+                for option in options
+                if isinstance(option, dict)
+                and isinstance(option.get("text"), str)
+                and option["text"].strip().casefold() == raw.strip().casefold()
+            ]
+            if len(matches) == 1:
+                code = matches[0]
+
+        if code is None:
+            raise WebPortalComfortShapeError(raw, options)
+        return {"value": code, "dropDownOptions": options}
 
     async def async_read_comfort(self, gateway: str) -> dict[str, Any]:
         async with self._lock:
@@ -203,10 +244,14 @@ class AristonWebPortal:
             options = before.get("dropDownOptions")
             if not isinstance(options, list):
                 raise WebPortalError("Comfort choices not declared by gateway")
-            allowed = {
-                opt.get("value") for opt in options
-                if isinstance(opt, dict) and type(opt.get("value")) is int
-            }
+            allowed_list = [
+                comfort_option_code(opt.get("value"))
+                for opt in options if isinstance(opt, dict)
+            ]
+            allowed = {code for code in allowed_list if code is not None}
+            # Reject ambiguous/malformed dropdown declarations.
+            if len(allowed_list) != len(allowed) or old not in allowed:
+                raise WebPortalError("Comfort choices ambiguous or incomplete")
             if desired not in allowed:
                 raise WebPortalError("Desired Comfort mode not offered")
             if desired == old:
