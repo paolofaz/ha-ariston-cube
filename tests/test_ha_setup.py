@@ -119,8 +119,13 @@ def test_climate_water_heater_use_2026_10_temperature_interface(filename):
     assert "native_target_temperature" not in methods
     assert "_attr_temperature_unit = UnitOfTemperature.CELSIUS" in source
     assert "_attr_native_temperature_unit" not in source
-    # Do not advertise a writable setpoint until user explicitly opts in.
-    assert "_attr_supported_features = 0" in source
+    # Temperature control is deliberately enabled in 0.3.0; mode writes are not.
+    if filename == "climate.py":
+        assert "_attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE" in source
+        assert '"ZoneComfortTemp"' in source
+    else:
+        assert "_attr_supported_features = WaterHeaterEntityFeature.TARGET_TEMPERATURE" in source
+        assert '"DhwTemp"' in source
 
 
 @pytest.mark.parametrize(
