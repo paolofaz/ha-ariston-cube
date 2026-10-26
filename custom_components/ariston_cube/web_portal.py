@@ -11,6 +11,7 @@ import asyncio
 import html
 import json
 import re
+import time
 from typing import Any
 
 import aiohttp
@@ -30,6 +31,25 @@ _XHR_HEADERS = {
 }
 
 
+# Login-page navigation needs browser-style HTML headers, not the
+# Home Assistant client User-Agent nor an API-specific JSON Accept header.
+_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
+_LOGIN_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+    "User-Agent": _BROWSER_USER_AGENT,
+}
+_XHR_HEADERS["User-Agent"] = _BROWSER_USER_AGENT
+
+# A forbidden web login is a host/access failure; no repeated requests
+# every 30 minutes while Comfort / Smc remain unavailable.
+_FORBIDDEN_RETRY_DELAY_SECONDS = 7200
+
+
 class WebPortalError(Exception):
     """Sanitized web portal error—never includes raw response or URL."""
 
@@ -47,19 +67,31 @@ class AristonWebPortal:
         self._password = password
         self._logged_in = False
         self._lock = asyncio.Lock()
+        self._web_login_blocked_until = 0.0
+        self._blocked_login_http_status: int | None = None
 
     async def _login(self) -> None:
         """Use official R2 anti-CSRF cookie login, once per session."""
         if self._logged_in:
             return
+        if time.monotonic() < self._web_login_blocked_until:
+            raise WebPortalAuthError(
+                f"Web login form HTTP {self._blocked_login_http_status}"
+            )
         try:
             async with self._session.get(
                 BASE_URL + "/R2/Account/Login",
+                headers=_LOGIN_HEADERS,
                 timeout=aiohttp.ClientTimeout(total=25),
                 allow_redirects=True,
                 max_redirects=5,
             ) as response:
                 if response.status != 200:
+                    if response.status in (403, 429):
+                        self._web_login_blocked_until = (
+                            time.monotonic() + _FORBIDDEN_RETRY_DELAY_SECONDS
+                        )
+                        self._blocked_login_http_status = response.status
                     raise WebPortalAuthError(f"Web login form HTTP {response.status}")
                 final_url = getattr(response, "url", URL(BASE_URL))
                 if final_url.host != URL(BASE_URL).host or final_url.scheme != "https":
