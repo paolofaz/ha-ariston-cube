@@ -308,3 +308,22 @@ La normale entità calendario non è adatta a visualizzare programmi ricorrenti.
 È disponibile una scheda Lovelace autonoma, soltanto grafica, nel file
 `frontend/ariston-cube-weekly-card.js`, con guida in `frontend/README.md`.
 Non invia comandi e non crea uno schedule locale alternativo.
+
+
+## Auto-installed Cube S weekly card (0.7.2)
+
+The tested weekly Lovelace card is bundled as
+`custom_components/ariston_cube/www/ariston-cube-weekly-card.js`, so installing
+the integration brings the file along. In Lovelace resource **storage** mode,
+it is registered automatically as a JS module. No extra downloads or manual
+resource registration are required for a fresh installation.
+
+Your previously manual `/local/ariston-cube-weekly-card.js?v=1` resource
+may still exist. To use the updated automatically bundled card, remove
+that old resource from the dashboard resources; leave the existing Lovelace
+card YAML configuration unchanged (`type: custom:ariston-cube-weekly-card`).
+The card continues to be a **read-only** representation of the Cube S's
+existing timetable.
+
+With Lovelace YAML resource mode, the resource has to be declared explicitly
+as `/ariston_cube/ariston-cube-weekly-card.js?v=0.7.2`.
