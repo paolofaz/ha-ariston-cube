@@ -128,3 +128,22 @@ The legacy `ariston` component is separate from `ariston_cube`. A
 `500 InternalError` received by the old component is a different cloud
 request and can reflect gateway or rate issues. Avoid sustained parallel
 high-frequency polling against the same plant.
+
+## Verifying HA platform loading in 0.2.2
+
+Enable `logger.logs.custom_components.ariston_cube: debug` and do a full
+Home Assistant restart. Logs now show whether the installed `__init__.py`
+actually uses all four platforms and whether Home Assistant invokes and
+accepts the `climate` and `water_heater` entities:
+
+- `Ariston Cube 0.2.2 starting; platforms=sensor, binary_sensor, climate, water_heater`
+- `Ariston Cube climate platform setup invoked`
+- `Ariston Cube climate entity added to Home Assistant`
+- `Ariston Cube water_heater platform setup invoked`
+- `Ariston Cube water_heater entity added to Home Assistant`
+
+The absence of the first line means the old `__init__.py` may still be
+running. The absence of a platform or entity line distinguishes a platform
+loading failure from entity registration trouble. Check the
+`/config/custom_components/ariston_cube/manifest.json` version is 0.2.2.
+The five previous sensors remain unchanged.

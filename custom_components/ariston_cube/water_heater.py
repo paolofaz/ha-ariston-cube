@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.water_heater import WaterHeaterEntity
 from homeassistant.const import UnitOfTemperature
 from homeassistant.exceptions import HomeAssistantError
@@ -11,8 +13,12 @@ from .model import as_temperature
 from .states import hot_water_operation
 
 
+_LOGGER = logging.getLogger(__name__)
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Add one DHW entity without any command interface."""
+    _LOGGER.info("Ariston Cube water_heater platform setup invoked")
     async_add_entities([AristonDomesticHotWater(entry.runtime_data)])
 
 
@@ -32,6 +38,11 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
 
     def __init__(self, coordinator) -> None:
         super().__init__(coordinator, "water_heater")
+
+    async def async_added_to_hass(self) -> None:
+        """Confirm HA accepted the new entity, not just its platform."""
+        await super().async_added_to_hass()
+        _LOGGER.info("Ariston Cube water_heater entity added to Home Assistant")
 
     @property
     def target_temperature(self) -> float | None:

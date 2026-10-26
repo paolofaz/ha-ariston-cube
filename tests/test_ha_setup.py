@@ -121,3 +121,15 @@ def test_climate_water_heater_use_2026_10_temperature_interface(filename):
     assert "_attr_native_temperature_unit" not in source
     # Do not advertise a writable setpoint until user explicitly opts in.
     assert "_attr_supported_features = 0" in source
+
+
+@pytest.mark.parametrize(
+    ("filename", "domain"),
+    [("climate.py", "climate"), ("water_heater.py", "water_heater")],
+)
+def test_platforms_emit_setup_and_entity_registration_diagnostics(filename, domain):
+    source = (ROOT / filename).read_text(encoding="utf-8")
+    assert f"Ariston Cube {domain} platform setup invoked" in source
+    assert f"Ariston Cube {domain} entity added to Home Assistant" in source
+    assert "async def async_added_to_hass(self)" in source
+    assert "await super().async_added_to_hass()" in source

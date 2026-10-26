@@ -6,6 +6,8 @@ have been validated with real, sanitized responses.
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.climate import ClimateEntity, HVACAction, HVACMode
 from homeassistant.const import UnitOfTemperature
 from homeassistant.exceptions import HomeAssistantError
@@ -15,8 +17,12 @@ from .model import as_temperature
 from .states import heating_activity, heating_mode, zone_program
 
 
+_LOGGER = logging.getLogger(__name__)
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Add exactly one thermostat for the selected zone 1."""
+    _LOGGER.info("Ariston Cube climate platform setup invoked")
     async_add_entities([AristonCubeClimate(entry.runtime_data)])
 
 
@@ -33,6 +39,11 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
 
     def __init__(self, coordinator) -> None:
         super().__init__(coordinator, "climate")
+
+    async def async_added_to_hass(self) -> None:
+        """Confirm HA accepted the new entity, not just its platform."""
+        await super().async_added_to_hass()
+        _LOGGER.info("Ariston Cube climate entity added to Home Assistant")
 
     @property
     def current_temperature(self) -> float | None:
