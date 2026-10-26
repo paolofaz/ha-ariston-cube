@@ -217,3 +217,64 @@ def test_web_429_is_cooldown_not_repeated_auth_requests():
         with pytest.raises(web.WebPortalAuthError, match="HTTP 429"):
             asyncio.run(portal.async_read_metering("GW123"))
     assert len(session.calls) == 1
+
+
+
+@pytest.mark.parametrize("raw", [0, 0.0, "0.0", " 0 ", 1, 1.0, "1.0",
+                                  2, 2.0, "2.0", " 2 "])
+def test_legacy_numeric_menu_codes_support_decimal_json(raw):
+    assert web.AristonWebPortal.comfort_record(menu(raw))["value"] == int(float(raw))
+
+
+def test_legacy_menu_localized_display_text_maps_by_declared_options():
+    customized = {"data": [{"id": "U6_9_2", "value": "Sempre attivo",
+                 "dropDownOptions": [
+                     {"value": "0.0", "text": "Spento"},
+                     {"value": "1.0", "text": "Temporizzato"},
+                     {"value": "2.0", "text": "Sempre attivo"},
+                 ]}]}
+    assert web.AristonWebPortal.comfort_record(customized)["value"] == 2
+
+
+def test_comfort_switch_writes_once_from_decimal_menu_and_strings_dropdown():
+    adapted = {"data": [{"id": "U6_9_2", "value": 0.0,
+                         "dropDownOptions": [
+                             {"value": "0", "text": "Off"},
+                             {"value": "1", "text": "Timed"},
+                             {"value": "2", "text": "Always"},
+                         ]}]}
+    session = Session(
+        Reply(FORM), Reply({"ok": True}), Reply(adapted),
+        Reply({"ok": True}), Reply(menu(2.0)),
+    )
+    assert asyncio.run(web.AristonWebPortal(
+        session, "u", "p"
+    ).async_set_comfort("GW123", 2)) == 2
+    writes = [(method, options["json"]) for method, path, options
+              in session.calls if "/PlantMenu/Submit/" in path]
+    assert writes == [("POST", [{"id": "U6_9_2", "value": 2, "prevValue": 0}])]
+
+
+def test_comfort_unknown_response_is_read_only_and_schema_safe():
+    invalid = {"data": [{"id": "U6_9_2",
+                "value": {"nested": "SECRET"},
+                "dropDownOptions": [{"value": 0, "text": "SECRET"}]}]}
+    with pytest.raises(web.WebPortalComfortShapeError) as info:
+        web.AristonWebPortal.comfort_record(invalid)
+    assert info.value.value_kind == "dict"
+    assert info.value.option_value_kinds == ["int"]
+    assert "SECRET" not in str(info.value)
+
+
+def test_duplicate_menu_choices_never_enable_write():
+    duplicate = {"data": [{"id": "U6_9_2", "value": 0.0,
+                 "dropDownOptions": [
+                     {"value": 0, "text": "Off"},
+                     {"value": "0", "text": "Disabled"},
+                     {"value": 2, "text": "Always"}]}]}
+    session = Session(Reply(FORM), Reply({"ok": True}), Reply(duplicate))
+    with pytest.raises(web.WebPortalError, match="ambiguous"):
+        asyncio.run(web.AristonWebPortal(
+            session, "u", "p"
+        ).async_set_comfort("GW123", 2))
+    assert not any("/PlantMenu/Submit/" in path for _, path, _ in session.calls)
