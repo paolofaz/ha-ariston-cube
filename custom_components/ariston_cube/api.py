@@ -55,14 +55,17 @@ def _phase(path: str) -> str:
 class AristonClient:
     """Async cloud client with serialized reads and bounded explicit writes."""
 
-    def __init__(self, session: aiohttp.ClientSession, username: str, password: str) -> None:
+    def __init__(
+        self, session: aiohttp.ClientSession, username: str, password: str,
+        *, web_session: aiohttp.ClientSession | None = None,
+    ) -> None:
         self._session = session
         self._username = username
         self._password = password
         self._token: str | None = None
         self._features: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
-        self.web_portal = AristonWebPortal(session, username, password)
+        self.web_portal = AristonWebPortal(web_session or session, username, password)
 
     async def _request(
         self, method: str, path: str, *,
