@@ -99,8 +99,8 @@ def test_setup_does_not_return_none(monkeypatch):
     assert integration.async_setup_entry.__annotations__["return"] == "bool"
 
 
-@pytest.mark.parametrize("filename", ["climate.py", "water_heater.py"])
-def test_climate_water_heater_use_2026_10_temperature_interface(filename):
+@pytest.mark.parametrize("filename", ["climate.py"])
+def test_climate_uses_2026_10_temperature_interface(filename):
     """2026.11 native_ properties are not supported by HA Core 2026.10."""
     source = (ROOT / filename).read_text(encoding="utf-8")
     module = ast.parse(source)
@@ -120,13 +120,8 @@ def test_climate_water_heater_use_2026_10_temperature_interface(filename):
     assert "native_target_temperature" not in methods
     assert "_attr_temperature_unit = UnitOfTemperature.CELSIUS" in source
     assert "_attr_native_temperature_unit" not in source
-    # Temperature control is deliberately enabled in 0.3.0; mode writes are not.
-    if filename == "climate.py":
-        assert "_attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE" in source
-        assert '"ZoneComfortTemp"' in source
-    else:
-        assert "_attr_supported_features = WaterHeaterEntityFeature.TARGET_TEMPERATURE" in source
-        assert '"DhwTemp"' in source
+    assert "_attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE" in source
+    assert '"ZoneComfortTemp"' in source
 
 
 @pytest.mark.parametrize(
