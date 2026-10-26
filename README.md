@@ -2,12 +2,14 @@
 
 A new, minimal custom integration for the **Ariston CLAS ONE 30L + Cube S** via the legacy Ariston NET cloud API.
 
-> **Development status: experimental / read-only prototype (0.1.0).**
-> This is not yet validated against a live Cube S. Do not replace the existing
-> Ariston integration or remove its Recorder statistics. No boiler control is
-> implemented in this branch.
+> **Development status: experimental / read-only prototype.**
+> Login and the original five read-only sensors were successfully tested on a
+> real CLAS ONE/Cube S on 26 October 2026. The additional climate and water
+> heater entities have **not yet** been validated on the live boiler. Do not
+> replace the existing Ariston integration or remove its Recorder history.
+> No boiler control is implemented in this branch.
 
-## Scope of milestone 1
+## Milestone 1 and 2 status
 
 - Configuration from **Settings > Devices & services > Add integration** (no YAML).
 - Token-based Ariston mobile API authentication and plant selection.

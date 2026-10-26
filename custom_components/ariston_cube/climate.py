@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from homeassistant.components.climate import ClimateEntity, HVACAction, HVACMode
 from homeassistant.const import UnitOfTemperature
+from homeassistant.exceptions import HomeAssistantError
 
 from .entity import AristonEntity
 from .model import as_temperature
@@ -68,9 +69,14 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
 
     @property
     def available(self) -> bool:
-        return (
-            super().available
-            and self.native_current_temperature is not None
-            and self.native_target_temperature is not None
-            and self.hvac_mode is not None
+        # Keep known temperatures visible if the cloud omits an optional mode.
+        return super().available and (
+            self.native_current_temperature is not None
+            or self.native_target_temperature is not None
         )
+
+    async def async_set_temperature(self, **kwargs) -> None:
+        raise HomeAssistantError("Ariston Cube is read-only in this test build")
+
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        raise HomeAssistantError("Ariston Cube cannot change heating mode yet")

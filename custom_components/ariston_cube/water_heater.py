@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.water_heater import WaterHeaterEntity
 from homeassistant.const import UnitOfTemperature
+from homeassistant.exceptions import HomeAssistantError
 
 from .entity import AristonEntity
 from .model import as_temperature
@@ -60,8 +61,11 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
 
     @property
     def available(self) -> bool:
-        return (
-            super().available
-            and self.native_target_temperature is not None
-            and self.current_operation is not None
-        )
+        # Missing DhwMode should not hide a verified ACS target temperature.
+        return super().available and self.native_target_temperature is not None
+
+    async def async_set_temperature(self, **kwargs) -> None:
+        raise HomeAssistantError("Ariston Cube is read-only in this test build")
+
+    async def async_set_operation_mode(self, operation_mode: str) -> None:
+        raise HomeAssistantError("Ariston Cube cannot change DHW mode yet")

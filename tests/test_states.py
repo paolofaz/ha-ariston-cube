@@ -86,3 +86,12 @@ def test_response_retains_new_fields():
     assert model.as_temperature(read["ZoneComfortTemp"]) == 20.5
     assert model.as_temperature(read["ZoneEconomyTemp"]) == 17.5
     assert states.hot_water_operation(read) == "scheduled"
+
+
+def test_holiday_mode_is_not_automatically_treated_as_off():
+    assert states.heating_mode(data(plant=6, zone=3)) is None
+
+
+def test_integral_float_mode_codes_are_allowed():
+    assert states.enum_code({"value": 2.0}) == 2
+    assert states.enum_code({"value": 2.5}) is None

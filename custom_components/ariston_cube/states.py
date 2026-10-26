@@ -20,6 +20,8 @@ def enum_code(record: dict[str, Any] | None) -> int | None:
         return None
     if isinstance(value, int):
         return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
     if isinstance(value, str):
         try:
             return int(value)
@@ -34,8 +36,9 @@ def heating_mode(data: dict[str, dict[str, Any]]) -> str | None:
     zone = enum_code(data.get("ZoneMode"))
     if plant is None or zone is None:
         return None
-    # Plant mode 0=summer, 5=off, 6=holiday; zone 0=off.
-    if plant in (0, 5, 6) or zone == 0:
+    # Plant mode 0=summer, 5=off; holiday mode is intentionally unknown.
+    # The cloud may still allow frost protection in holiday mode.
+    if plant in (0, 5) or zone == 0:
         return "off"
     # 1=winter, 2=heating-only; zone 1/2/3 permits heating.
     if plant in (1, 2) and zone in (1, 2, 3):
