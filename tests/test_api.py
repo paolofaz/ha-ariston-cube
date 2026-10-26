@@ -201,7 +201,7 @@ def test_write_rejected_in_program_mode_before_any_set_post():
     async def scenario():
         client = api.AristonClient(session, "user", "secret")
         try:
-            await client.async_set_setpoint("GW123", "ZoneComfortTemp", 22)
+            await client.async_set_setpoint("GW123", "ZoneComfortTemp", 22, require_manual=True)
         except api.CommandRejected:
             return
         assert False, "Expected no write in time-program mode"
@@ -310,3 +310,32 @@ def test_mode_no_unsupported_transition_when_options_absent():
         assert False, "Expected fail-closed for absent mode options"
     run(scenario())
     assert not any("/set?" in url for _, url, _ in session.calls)
+
+
+def test_comfort_preset_can_change_in_auto_without_overriding_zone_mode():
+    readings = _readback_items(comfort=21.0)
+    for item in readings["items"]:
+        if item["id"] == "ZoneMode":
+            item["value"] = 3
+    after = _readback_items(comfort=21.5)
+    for item in after["items"]:
+        if item["id"] == "ZoneMode":
+            item["value"] = 3
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(readings),
+        Response(None),
+        Response(after),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_set_setpoint("GW123", "ZoneComfortTemp", 21.5)
+        assert result["ZoneComfortTemp"]["value"] == 21.5
+        assert result["ZoneMode"]["value"] == 3
+
+    run(scenario())
+    writes = [opts["json"] for _, url, opts in session.calls if "/set?" in url]
+    assert len(writes) == 1
+    assert writes[0]["items"][0]["id"] == "ZoneComfortTemp"

@@ -23,6 +23,7 @@ def test_acs_number_uses_box_step_one_and_device_limits():
     assert "NumberMode.BOX" in number
     assert '("DhwTemp", "acs_temperature", 36.0, 60.0, 1.0)' in number
     assert '"ZoneEconomyTemp"' in number
+    assert '("ZoneComfortTemp", "heating_comfort", 10.0, 30.0, 0.5)' in number
     assert "await self.coordinator.async_set_setpoint(self._field, value)" in number
     assert "async_def" not in number
     assert tree is not None

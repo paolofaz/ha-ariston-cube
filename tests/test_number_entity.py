@@ -112,3 +112,24 @@ def test_economy_number_unavailable_when_cloud_has_no_value(monkeypatch):
         types.SimpleNamespace(data={}), "ZoneEconomyTemp", "heating_economy", 10, 30, 0.5
     )
     assert not entity.available
+
+
+def test_both_comfort_and_economy_are_hard_capped_10_to_30(monkeypatch):
+    module, Error = load_module(monkeypatch)
+    for key in ("ZoneComfortTemp", "ZoneEconomyTemp"):
+        coordinator = types.SimpleNamespace(
+            data={key: {"value": 21, "min": 5, "max": 35, "step": 0.5}}
+        )
+        ent = module.AristonCubeNumber(
+            coordinator, key, "heating_comfort", 10, 30, 0.5
+        )
+        assert ent.native_min_value == 10.0
+        assert ent.native_max_value == 30.0
+        assert ent.native_step == 0.5
+        assert ent.native_value == 21.0
+
+
+def test_number_definitions_include_comfort_and_economy(monkeypatch):
+    module, _ = load_module(monkeypatch)
+    assert ("ZoneEconomyTemp", "heating_economy", 10.0, 30.0, 0.5) in module._NUMBERS
+    assert ("ZoneComfortTemp", "heating_comfort", 10.0, 30.0, 0.5) in module._NUMBERS

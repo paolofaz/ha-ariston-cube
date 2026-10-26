@@ -88,7 +88,7 @@ def test_comfort_setpoint_write_requires_manual_zone_and_heat_plant():
     }
     for state in (snapshot(ZoneMode={"value": 3}), snapshot(PlantMode={"value": 0})):
         with pytest.raises(commands.CommandRejected, match="mode"):
-            commands.build_setpoint_request(state, FEATURES, "ZoneComfortTemp", 21.5)
+            commands.build_setpoint_request(state, FEATURES, "ZoneComfortTemp", 21.5, require_manual=True)
 
 
 
@@ -108,3 +108,28 @@ def test_zone_mode_rejects_options_missing_or_summer_plant():
     ]:
         with pytest.raises(commands.CommandRejected):
             commands.build_zone_mode_request(readings, FEATURES, 3)
+
+
+def test_comfort_preset_remains_editable_in_auto_but_active_target_does_not():
+    state = snapshot(ZoneMode={"value": 3})
+    body = commands.build_setpoint_request(state, FEATURES, "ZoneComfortTemp", 21.5)
+    assert body["items"][0]["value"] == 21.5
+    with pytest.raises(commands.CommandRejected, match="mode"):
+        commands.build_setpoint_request(state, FEATURES, "ZoneDesiredTemp", 20.5)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("ZoneComfortTemp", 9.5),
+    ("ZoneComfortTemp", 30.5),
+    ("ZoneEconomyTemp", 9.5),
+    ("ZoneEconomyTemp", 30.5),
+    ("ZoneComfortTemp", 20.25),
+    ("ZoneEconomyTemp", 20.25),
+    ("DhwTemp", 49.5),
+])
+def test_server_side_temperature_caps_and_step(field, value):
+    state = snapshot(ZoneComfortTemp={"value": 21, "min": 8, "max": 32, "step": 0.5},
+                     ZoneEconomyTemp={"value": 18, "min": 8, "max": 32, "step": 0.5},
+                     DhwTemp={"value": 49, "min": 35, "max": 65, "step": 1})
+    with pytest.raises(commands.CommandRejected):
+        commands.build_setpoint_request(state, FEATURES, field, value)
