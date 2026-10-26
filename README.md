@@ -105,3 +105,26 @@ writes or alter the Cube S scheduler.
 Real writes require an intentionally separate, opt-in implementation and
 careful validation on the specific boiler; installing this branch still
 performs **read requests only**.
+
+## Home Assistant 2026.10 compatibility / troubleshooting
+
+The 2026.10 Home Assistant platform APIs still use `temperature_unit`,
+`current_temperature`, and `target_temperature` for `climate` and
+`water_heater`. The `native_*` replacements are scheduled for 2026.11,
+so this milestone deliberately uses the older, compatible names.
+
+To verify the new entities, open **Settings > Devices & services > Entities**
+or **Developer tools > States** and filter by `ariston_cube`, `climate.`
+and `water_heater.`. The physical device page is not guaranteed to show
+a **Controls** section because the new entities currently advertise no
+write-capable features (`supported_features=0`). They are *read-only*;
+that absence is not, by itself, an installation failure.
+
+Updating custom-component code requires a **full Home Assistant restart**,
+not just reload of the integration. The domain-specific logs must not show
+`async_setup_entry did not return boolean` or `already been setup!`.
+
+The legacy `ariston` component is separate from `ariston_cube`. A
+`500 InternalError` received by the old component is a different cloud
+request and can reflect gateway or rate issues. Avoid sustained parallel
+high-frequency polling against the same plant.
