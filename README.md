@@ -389,3 +389,21 @@ The two features still depend on the live R2 web endpoint accepting this
 specific account; tests alone cannot establish that. In case of a continuing
 403/404/5xx, do not repeatedly retry the Comfort switch or invent Smc from
 the kWh series. Old mobile sensors/controls and Recorder are left intact.
+
+
+## 0.8.2 — server-side 403 handling
+
+Real Home Assistant 0.8.1 logs showed the R2 **GET login form returns HTTP
+403**, while the mobile v2 API and the already working kWh gas sensors
+continue to respond successfully. The 0.8.2 R2 login sends a browser-style
+`User-Agent` and HTML Accept headers on the login page, keeping JSON/XHR
+headers on JSON web requests.
+
+HTTP 403 and 429 cause a two-hour local retry cooldown (without network
+traffic) so the optional web Smc and ACS Comfort components do not hammer
+a rejecting server every 30 minutes. A login session is only considered
+successful after the authenticated form response. This is a compatibility
+attempt, **not proof** that the remote web portal is available to the
+specific account. If the web server continues returning 403, both web
+dependent features correctly remain unavailable. The mobile API, existing
+entity IDs, legacy Ariston integration and Recorder remain untouched.

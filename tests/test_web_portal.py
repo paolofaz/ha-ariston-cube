@@ -185,3 +185,35 @@ def test_web_antiforgery_input_attribute_order_independent():
         web.AristonWebPortal(session, "u", "p").async_read_comfort("GW123")
     )["value"] == 0
     assert session.cookie_jar.cookies[0]["__formRequestVerificationToken"] == "abc123"
+
+
+
+def test_browser_headers_for_login_page_and_xhr():
+    session = Session(Reply(FORM), Reply({"ok": True}), Reply(menu(0)))
+    portal = web.AristonWebPortal(session, "u", "p")
+    assert asyncio.run(portal.async_read_comfort("GW123"))["value"] == 0
+    page_headers = session.calls[0][2]["headers"]
+    assert "Mozilla/" in page_headers["User-Agent"]
+    assert "text/html" in page_headers["Accept"]
+    assert "Ajax-Request" not in page_headers
+    xhr_headers = session.calls[1][2]["headers"]
+    assert "Mozilla/" in xhr_headers["User-Agent"]
+    assert xhr_headers["Ajax-Request"] == "json"
+
+
+def test_web_403_is_cooldown_not_repeated_auth_requests():
+    session = Session(Reply("forbidden", status=403))
+    portal = web.AristonWebPortal(session, "u", "p")
+    for _ in range(3):
+        with pytest.raises(web.WebPortalAuthError, match="HTTP 403"):
+            asyncio.run(portal.async_read_comfort("GW123"))
+    assert len(session.calls) == 1
+
+
+def test_web_429_is_cooldown_not_repeated_auth_requests():
+    session = Session(Reply("rate limited", status=429))
+    portal = web.AristonWebPortal(session, "u", "p")
+    for _ in range(2):
+        with pytest.raises(web.WebPortalAuthError, match="HTTP 429"):
+            asyncio.run(portal.async_read_metering("GW123"))
+    assert len(session.calls) == 1
