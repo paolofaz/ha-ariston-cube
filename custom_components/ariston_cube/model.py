@@ -4,8 +4,23 @@ from __future__ import annotations
 
 from typing import Any
 
-PLANT_IDS = frozenset(("PlantMode", "IsFlameOn", "DhwTemp", "DhwStorageTemperature"))
-ZONE_IDS = frozenset(("ZoneMeasuredTemp", "ZoneDesiredTemp", "ZoneHeatRequest", "ZoneMode"))
+PLANT_IDS = frozenset((
+    "PlantMode",
+    "IsFlameOn",
+    "DhwTemp",
+    "DhwStorageTemperature",
+    "DhwMode",
+    "DhwTimeProgComfortTemp",
+    "DhwTimeProgEconomyTemp",
+))
+ZONE_IDS = frozenset((
+    "ZoneMeasuredTemp",
+    "ZoneDesiredTemp",
+    "ZoneHeatRequest",
+    "ZoneMode",
+    "ZoneComfortTemp",
+    "ZoneEconomyTemp",
+))
 
 
 def parse_plants(payload: Any) -> list[dict[str, str]]:

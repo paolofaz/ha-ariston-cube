@@ -46,6 +46,16 @@
       "flame": {
         "name": "Flame"
       }
+    },
+    "climate": {
+      "cube_s": {
+        "name": "Cube S"
+      }
+    },
+    "water_heater": {
+      "acs": {
+        "name": "Acqua calda sanitaria"
+      }
     }
   }
 }
