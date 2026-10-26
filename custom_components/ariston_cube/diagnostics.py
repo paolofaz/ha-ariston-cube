@@ -194,10 +194,16 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     coordinator = entry.runtime_data
     snapshots = await coordinator.client.async_diagnostic_reports(coordinator.plant_id)
     comfort_probe = await coordinator.client.async_probe_dhw_comfort_menu(coordinator.plant_id)
-    try:
-        overnight = await NightSmcHistory(hass, entry.entry_id).async_get_snapshots()
-    except (OSError, ValueError) as exc:
-        overnight = [{"error_type": type(exc).__name__}]
+    # Ordinary HA config entries always have entry_id. Lightweight test
+    # fixtures and non-file-backed diagnostic contexts may not.
+    overnight = []
+    if hass is not None and getattr(entry, "entry_id", None):
+        try:
+            overnight = await NightSmcHistory(
+                hass, entry.entry_id
+            ).async_get_snapshots()
+        except (OSError, ValueError) as exc:
+            overnight = [{"error_type": type(exc).__name__}]
 
     safe_reports = {}
     for key in ("weekly_program", "energy_account", "consumption_sequences",
