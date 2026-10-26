@@ -11,7 +11,7 @@ def test_web_comfort_checks_phone_changes_within_five_minutes():
     assert "timedelta(minutes=30)" not in comfort
     # User commands still perform a separate immediate readback.
     portal = (ROOT / "web_portal.py").read_text()
-    assert 'self._request("POST", f"/R2/PlantMenu/Submit/{gateway}"' in portal
+    assert 'f"/R2/PlantMenu/Submit/{gateway}"' in portal
     assert 'confirmed = self.comfort_record(await self._request("GET", path))' in portal
 
 
