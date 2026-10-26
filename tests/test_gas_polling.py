@@ -5,10 +5,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "custom_components/ariston_cube"
 
 
-def test_web_comfort_checks_phone_changes_within_five_minutes():
+def test_web_comfort_checks_phone_changes_within_fifteen_minutes():
     comfort = (ROOT / "comfort_coordinator.py").read_text()
-    assert "timedelta(minutes=5)" in comfort
-    assert "timedelta(minutes=30)" not in comfort
+    assert "timedelta(minutes=15)" in comfort
+    assert "timedelta(minutes=5)" not in comfort
     # User commands still perform a separate immediate readback.
     portal = (ROOT / "web_portal.py").read_text()
     assert 'f"/R2/PlantMenu/Submit/{gateway}"' in portal

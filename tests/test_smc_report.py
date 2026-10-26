@@ -71,7 +71,7 @@ def test_no_fabricated_zero_from_missing_or_bad_series():
 
 def test_smc_entities_not_misrepresented_as_lifetime_gas_meter():
     source = (ROOT / "sensor.py").read_text()
-    cls = source.split("class AristonPhysicalGas", 1)[1]
+    cls = source.split("class AristonPhysicalGas", 1)[1].split("class AristonCumulativeGas", 1)[0]
     assert '_attr_native_unit_of_measurement = "Smc"' in cls
     assert "_attr_state_class" not in cls
     assert "_attr_device_class" not in cls
