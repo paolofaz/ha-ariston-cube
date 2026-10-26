@@ -84,7 +84,8 @@ def test_weekly_schedule_platform_is_read_only_and_infrequent():
     sensor_source = (ROOT / "sensor.py").read_text()
     assert "timedelta(hours=3)" in schedule_source
     assert "AristonWeeklySchedule" in sensor_source
-    assert "entry.async_create_background_task" in sensor_source
+    assert "get_or_create_weekly_coordinator" in sensor_source
+    assert "entry.async_create_background_task" in schedule_source
     assert "async_read_weekly_program" in schedule_source
     assert "async_set_" not in (ROOT / "weekly_program.py").read_text()
 
