@@ -131,7 +131,7 @@ def test_climate_water_heater_use_2026_10_temperature_interface(filename):
 
 @pytest.mark.parametrize(
     ("filename", "domain"),
-    [("climate.py", "climate"), ("water_heater.py", "water_heater")],
+    [("climate.py", "climate"), ("number.py", "number")],
 )
 def test_platforms_emit_setup_and_entity_registration_diagnostics(filename, domain):
     source = (ROOT / filename).read_text(encoding="utf-8")

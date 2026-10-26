@@ -78,3 +78,11 @@ pytest -q
 ```
 
 Offline tests do not prove any new device control works on a live Cube S.
+
+## Platform regression tests
+
+The CI suite contains unit-level platform contract tests for `climate`,
+`number`, and the Home Assistant setup return value. It also exercises
+ACS number clamping, step size, unavailable fields and dispatched setpoint
+calls without a network connection. Real Cube S behavior still requires
+on-device verification.

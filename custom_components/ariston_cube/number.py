@@ -53,6 +53,10 @@ class AristonCubeNumber(AristonEntity, NumberEntity):
         self._attr_native_max_value = upper
         self._attr_native_step = step
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        _LOGGER.info("Ariston Cube number entity added to Home Assistant")
+
     @property
     def native_value(self) -> float | None:
         return as_temperature(self.coordinator.data.get(self._field))
