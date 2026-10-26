@@ -2,7 +2,7 @@
 
 Experimental custom integration for **Ariston CLAS ONE 30L + Cube S** via the Ariston NET mobile API.
 
-## Version 0.4.0 — practical controls
+## Version 0.4.1 — practical controls
 
 Login and the five original sensors were tested on the real boiler. The Cube S
 `climate` temperature setting was also tested successfully on 2026-10-26.
@@ -32,7 +32,7 @@ migrate Recorder history.
 Download ZIP from `feat/initial-readonly-integration`. Copy
 `custom_components/ariston_cube` over `/config/custom_components/ariston_cube`
 and **restart the whole Home Assistant container**. There is no need to
-delete and re-add the Ariston Cube config entry. Verify manifest version 0.4.0.
+delete and re-add the Ariston Cube config entry. Verify manifest version 0.4.1.
 
 ## Safeguards for controls
 
@@ -86,3 +86,25 @@ The CI suite contains unit-level platform contract tests for `climate`,
 ACS number clamping, step size, unavailable fields and dispatched setpoint
 calls without a network connection. Real Cube S behavior still requires
 on-device verification.
+
+## On-demand diagnostics for energy and weekly schedule
+
+Once the integration is installed, use the integration's **Download
+diagnostics** menu item in Home Assistant. This makes exactly three additional
+read-only cloud requests, **only when you ask for diagnostics**, to:
+
+1. Read the Cube S's weekly `ChZn1` program.
+2. Read the energy-account report, where upstream has documented historical
+   period-specific gas/electricity fields.
+3. Read the `Ch,Dhw` consumption-sequence report.
+
+The diagnostics JSON contains just limited, allowlisted **field names, data
+types and list counts**. It does not contain actual measurements, dates,
+timestamps, plant IDs, usernames, tokens or boiler serials. Unknown keys are
+counted but never copied verbatim. You can share this JSON for analysis.
+
+No fake totals are published. When the real response schemas are understood,
+we can implement a persistent deduplicating accumulator for CH/DHW and a third
+electricity sensor only if its actual semantics are verified. The same
+diagnostics will let us read the exact weekly schedule without building a
+competing clock in HA.

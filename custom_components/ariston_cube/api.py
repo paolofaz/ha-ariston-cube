@@ -222,3 +222,25 @@ class AristonClient:
                     "Mode sent but not yet confirmed; do not retry immediately"
                 )
             return after
+
+
+    async def async_diagnostic_reports(self, plant_id: str) -> dict[str, Any]:
+        """On-demand read-only inspection; never log payload or identifiers."""
+        paths = {
+            "weekly_program": f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si",
+            "energy_account": f"/api/v2/remote/reports/{plant_id}/energyAccount",
+            "consumption_sequences": (
+                f"/api/v2/remote/reports/{plant_id}/consSequencesApi8"
+                "?usages=Ch%2CDhw"
+            ),
+        }
+        responses: dict[str, Any] = {}
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            for kind, path in paths.items():
+                try:
+                    responses[kind] = await self._request("GET", path)
+                except AristonError as exc:
+                    responses[kind] = exc
+        return responses
