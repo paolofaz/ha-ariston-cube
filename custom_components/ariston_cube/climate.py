@@ -24,7 +24,7 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
     """State of the Cube S, without competing with its scheduler."""
 
     _attr_name = "Cube S"
-    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
     _attr_supported_features = 0
     _attr_target_temperature_step = 0.5
@@ -35,11 +35,11 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
         super().__init__(coordinator, "climate")
 
     @property
-    def native_current_temperature(self) -> float | None:
+    def current_temperature(self) -> float | None:
         return as_temperature(self.coordinator.data.get("ZoneMeasuredTemp"))
 
     @property
-    def native_target_temperature(self) -> float | None:
+    def target_temperature(self) -> float | None:
         return as_temperature(self.coordinator.data.get("ZoneDesiredTemp"))
 
     @property
@@ -62,6 +62,7 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
     def extra_state_attributes(self) -> dict[str, object]:
         data = self.coordinator.data
         return {
+            "ariston_target_temperature": self.target_temperature,
             "ariston_zone_program": zone_program(data),
             "ariston_comfort_temperature": as_temperature(data.get("ZoneComfortTemp")),
             "ariston_economy_temperature": as_temperature(data.get("ZoneEconomyTemp")),
@@ -71,8 +72,8 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
     def available(self) -> bool:
         # Keep known temperatures visible if the cloud omits an optional mode.
         return super().available and (
-            self.native_current_temperature is not None
-            or self.native_target_temperature is not None
+            self.current_temperature is not None
+            or self.target_temperature is not None
         )
 
     async def async_set_temperature(self, **kwargs) -> None:

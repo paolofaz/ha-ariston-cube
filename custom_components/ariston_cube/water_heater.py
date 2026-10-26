@@ -20,7 +20,7 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
     """Display ACS target, optional storage temperature and current mode."""
 
     _attr_name = "Acqua calda sanitaria"
-    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = 0
     _attr_min_temp = 35
     _attr_max_temp = 65
@@ -34,11 +34,11 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
         super().__init__(coordinator, "water_heater")
 
     @property
-    def native_target_temperature(self) -> float | None:
+    def target_temperature(self) -> float | None:
         return as_temperature(self.coordinator.data.get("DhwTemp"))
 
     @property
-    def native_current_temperature(self) -> float | None:
+    def current_temperature(self) -> float | None:
         # CLAS ONE may not have an ACS storage tank; do not fake a sensor.
         value = as_temperature(self.coordinator.data.get("DhwStorageTemperature"))
         return value if value is not None and value > 0 else None
@@ -51,6 +51,7 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
     def extra_state_attributes(self) -> dict[str, object]:
         data = self.coordinator.data
         return {
+            "ariston_target_temperature": self.target_temperature,
             "ariston_comfort_temperature": as_temperature(
                 data.get("DhwTimeProgComfortTemp")
             ),
@@ -62,7 +63,7 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
     @property
     def available(self) -> bool:
         # Missing DhwMode should not hide a verified ACS target temperature.
-        return super().available and self.native_target_temperature is not None
+        return super().available and self.target_temperature is not None
 
     async def async_set_temperature(self, **kwargs) -> None:
         raise HomeAssistantError("Ariston Cube is read-only in this test build")
