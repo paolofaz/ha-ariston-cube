@@ -78,3 +78,30 @@ def test_diagnostic_api_uses_read_requests_only():
     method = source.split("async def async_diagnostic_reports", 1)[1]
     assert 'self._request("GET", path)' in method
     assert '_request("POST"' not in method
+
+
+def test_hidden_weekly_and_consumption_fields_are_anonymous_not_erased():
+    weekly = {"PRIVATE_DYNAMIC_ID": [{"xSecretName": {"periods": [1, 2, 3]}}]}
+    sequence = {"serialNumber": "PRIVATE", "internalCode": 42, "reading": 3.5}
+    a = diag.safe_shape(weekly)
+    b = diag.safe_shape(sequence)
+    assert a["omitted_keys"] == 1
+    assert a["unnamed_field_shapes"][0]["kind"] == "list"
+    assert a["unnamed_field_shapes"][0]["count"] == 1
+    assert b["omitted_keys"] == 3
+    assert {entry["kind"] for entry in b["unnamed_field_shapes"]} == {
+        "string", "integer", "number"
+    }
+    assert "PRIVATE" not in repr((a, b))
+    assert "serialNumber" not in repr((a, b))
+    assert "internalCode" not in repr((a, b))
+    assert "reading" not in repr((a, b))
+
+
+def test_unmapped_shapes_have_four_field_upper_bound():
+    obj = {"sensitive_field_" + str(i): "secret" for i in range(99)}
+    result = diag.safe_shape(obj)
+    assert result["omitted_keys"] == 99
+    assert len(result["unnamed_field_shapes"]) == 4
+    assert "sensitive_field" not in repr(result)
+    assert "secret" not in repr(result)

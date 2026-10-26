@@ -39,10 +39,19 @@ def safe_shape(value: Any, depth: int = 0) -> dict[str, Any]:
             for key, val in sorted(value.items(), key=lambda item: str(item[0]))
             if isinstance(key, str) and key in _ALLOWED_FIELDS
         }
+        # Show anonymous *shapes* for unknown keys, never their names or
+        # scalar values. The 0.4.1 diagnostics obscured the whole weekly
+        # schedule and every field in consumption-sequence entries.
+        unknown = [
+            safe_shape(val, depth + 1)
+            for key, val in sorted(value.items(), key=lambda item: str(item[0]))
+            if not (isinstance(key, str) and key in _ALLOWED_FIELDS)
+        ]
         return {
             "kind": "object",
             "fields": fields,
-            "omitted_keys": len(value) - len(fields),
+            "omitted_keys": len(unknown),
+            "unnamed_field_shapes": unknown[:4],
         }
     if isinstance(value, list):
         return {
@@ -81,7 +90,7 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     # Only static entity names; no account or plant data in the output.
     return {
         "integration": "ariston_cube",
-        "version": "0.4.1",
+        "version": "0.5.0",
         "purpose": "schema_only_no_personal_values",
         "reports": safe_reports,
     }

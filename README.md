@@ -130,3 +130,20 @@ can differ during AUTO because the Cube S time programme can select Economy.
 The new Comfort number allows adjusting the preset without switching away
 from AUTO. All numeric inputs are capped at 10–30 °C even if cloud metadata
 announces a wider range.
+
+## Diagnostics 0.5.0: what the previous export established
+
+The first real schema export reported an `energy_account.LastMonth` array
+containing two objects with `gas` and `elect` fields, and a
+`consumption_sequences` array containing 24 entries. The programme payload
+was an object with one unrecognized top-level field. The earlier schema-only
+filter suppressed all three field names from consumption-sequence entries and
+the top-level programme field, so this data **does not yet prove what each
+series means or which units it uses**.
+
+The next diagnostics export includes `unnamed_field_shapes` for up to four
+previously hidden fields per object. It reports only their **types and nested
+structure**—not the names or their contents—while leaving known safe field
+names intact. This helps inspect these endpoints without exposing the gateway
+ID, token, timestamps or actual gas readings. Do not create cumulative
+statistic sensors from `LastMonth` values.
