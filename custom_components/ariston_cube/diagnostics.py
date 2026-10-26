@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from .api import AristonError
-from .web_portal import WebPortalError
+from .web_portal import WebPortalError, WebPortalComfortShapeError
 
 # A strict semantic key allowlist: unknown/dynamic keys are not returned.
 _ALLOWED_FIELDS = frozenset({
@@ -147,6 +147,14 @@ def safe_consumption_units(raw: Any) -> dict[str, str]:
 
 def safe_dhw_comfort_menu(raw: Any) -> dict[str, str]:
     """Show only a known 0/1/2 Comfort ACS code, never raw web responses."""
+    if isinstance(raw, WebPortalComfortShapeError):
+        # Only schema metadata, no raw menu values, localization strings or IDs.
+        return {
+            "status": "formato_valore_sconosciuto",
+            "value_kind": raw.value_kind,
+            "dropdown_option_count": raw.option_count,
+            "dropdown_option_value_kinds": raw.option_value_kinds,
+        }
     if isinstance(raw, (AristonError, WebPortalError)):
         # Include only a numeric HTTP status from a strictly known error.
         # Never serialize a raw exception, URL, login HTML or credentials.
