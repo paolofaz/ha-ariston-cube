@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 
+import aiohttp
+
 from homeassistant.const import Platform
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_get_clientsession, async_create_clientsession
 
 from .api import AristonClient
 from .coordinator import AristonCoordinator
@@ -18,9 +20,14 @@ PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform
 
 async def async_setup_entry(hass, entry) -> bool:
     """Use a token-authenticated client and fetch the initial snapshot."""
-    _LOGGER.info("Ariston Cube 0.8.0 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
+    _LOGGER.info("Ariston Cube 0.8.1 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
     session = async_get_clientsession(hass)
-    client = AristonClient(session, entry.data["username"], entry.data["password"])
+    # Cookie-based R2 login must never share the mobile bearer-token session.
+    web_session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
+    client = AristonClient(
+        session, entry.data["username"], entry.data["password"],
+        web_session=web_session,
+    )
     coordinator = AristonCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
@@ -30,7 +37,7 @@ async def async_setup_entry(hass, entry) -> bool:
     except Exception as exc:  # noqa: BLE001
         # Optional UI must never prevent boiler entity setup.
         _LOGGER.warning("Cube S weekly card could not be registered: %s", type(exc).__name__)
-    _LOGGER.info("Ariston Cube 0.8.0 platform setup dispatched")
+    _LOGGER.info("Ariston Cube 0.8.1 platform setup dispatched")
     return True
 
 
