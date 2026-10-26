@@ -339,3 +339,91 @@ def test_comfort_preset_can_change_in_auto_without_overriding_zone_mode():
     writes = [opts["json"] for _, url, opts in session.calls if "/set?" in url]
     assert len(writes) == 1
     assert writes[0]["items"][0]["id"] == "ZoneComfortTemp"
+
+
+
+def _plant_control_items(mode=1, thermoreg=0):
+    return {"items": [
+        {"id": "PlantMode", "zone": 0, "value": mode, "options": [0, 1, 5]},
+        {"id": "AutomaticThermoregulation", "zone": 0, "value": thermoreg},
+    ]}
+
+
+def test_plant_mode_write_once_and_readback():
+    session = Session(
+        Response({"token": "token"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_plant_control_items(mode=1)),
+        Response(None),
+        Response(_plant_control_items(mode=0)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        updated = await client.async_set_plant_control("GW123", "PlantMode", 0)
+        assert updated["PlantMode"]["value"] == 0
+    run(scenario())
+    writes = [opts["json"] for _, url, opts in session.calls if "/set?" in url]
+    assert len(writes) == 1
+    assert writes[0]["items"] == [{
+        "id": "PlantMode", "zone": 0, "prevValue": 1, "value": 0
+    }]
+
+
+def test_thermoregulation_has_single_post_and_does_not_touch_zone():
+    session = Session(
+        Response({"token": "token"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_plant_control_items(thermoreg=0)),
+        Response(None),
+        Response(_plant_control_items(thermoreg=1)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_set_plant_control(
+            "GW123", "AutomaticThermoregulation", 1
+        )
+        assert result["AutomaticThermoregulation"]["value"] == 1
+    run(scenario())
+    writes = [opts["json"] for _, url, opts in session.calls if "/set?" in url]
+    assert len(writes) == 1
+    assert writes[0]["items"][0]["id"] == "AutomaticThermoregulation"
+    assert "ZoneMode" not in repr(writes[0])
+
+
+def test_plant_write_readback_failure_is_not_retried():
+    session = Session(
+        Response({"token": "token"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_plant_control_items(mode=1)),
+        Response(None),
+        Response(_plant_control_items(mode=1)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_set_plant_control("GW123", "PlantMode", 0)
+        except api.AristonResponseError as exc:
+            assert "unconfirmed" in str(exc)
+            return
+        assert False, "Expected unconfirmed write"
+    run(scenario())
+    assert sum("/set?" in url for _, url, _ in session.calls) == 1
+
+
+def test_no_write_when_plant_options_missing():
+    values = _plant_control_items(mode=1)
+    del values["items"][0]["options"]
+    session = Session(
+        Response({"token": "token"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(values),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_set_plant_control("GW123", "PlantMode", 5)
+        except api.CommandRejected:
+            return
+        assert False, "Missing modes must fail closed"
+    run(scenario())
+    assert not any("/set?" in url for _, url, _ in session.calls)
