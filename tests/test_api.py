@@ -427,3 +427,40 @@ def test_no_write_when_plant_options_missing():
         assert False, "Missing modes must fail closed"
     run(scenario())
     assert not any("/set?" in url for _, url, _ in session.calls)
+
+
+
+def test_weekly_program_is_get_only():
+    weekly = {"ChZn1": {"plans": [{"days": [1], "slices": [
+        {"from": 600, "temp": 1},
+    ]}]}}
+    session = Session(
+        Response({"token": "example"}, path="/api/v2/accounts/login"),
+        Response(weekly, path="/api/v2/remote/timeProgs"),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        assert await client.async_read_weekly_program("GW123") == weekly
+    run(scenario())
+    requests = [(method, url) for method, url, _ in session.calls]
+    assert requests[-1] == (
+        "GET",
+        "https://www.ariston-net.remotethermo.com/api/v2/remote/timeProgs/GW123/ChZn1?umsys=si",
+    )
+    assert not any("/set?" in url for _, url in requests)
+
+
+def test_weekly_read_reauthenticates_once_after_unauthorized_get():
+    weekly = {"ChZn1": {"plans": []}}
+    session = Session(
+        Response({"token": "first"}, path="/api/v2/accounts/login"),
+        Response(status=401),
+        Response({"token": "second"}, path="/api/v2/accounts/login"),
+        Response(weekly),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        assert await client.async_read_weekly_program("GW123") == weekly
+    run(scenario())
+    assert sum("/accounts/login" in url for _, url, _ in session.calls) == 2
+    assert sum("/timeProgs/" in url for _, url, _ in session.calls) == 2
