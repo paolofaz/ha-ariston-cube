@@ -90,3 +90,16 @@ a second schedule while the Cube S is managing its own time program.
 
 The cloud plant's summer mode takes precedence over any zone setting.
 Unknown status is not silently presented as a valid operating state.
+
+## Future write safety (not activated)
+
+`commands.py` now contains a pure, offline-tested builder for the established
+`dataItems/<plant>/set` JSON contract. It is **not imported or called by any
+entity or the HTTP client**. It checks a current server-side previous value,
+explicit server-provided minimum/maximum and temperature steps, local hard
+bounds, the fixed zone and active manual heating mode. It does not auto-retry
+writes or alter the Cube S scheduler.
+
+Real writes require an intentionally separate, opt-in implementation and
+careful validation on the specific boiler; installing this branch still
+performs **read requests only**.
