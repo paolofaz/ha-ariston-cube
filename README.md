@@ -301,3 +301,10 @@ stored Cube S weekly programme. The Schedule integration is a user-managed
 helper and cannot itself push edits back to the Cube S, so we do not create
 a competing schedule helper. Editable weekly programmes require a verified
 Ariston cloud write endpoint.
+
+## Vista settimanale compatta (facoltativa)
+
+La normale entità calendario non è adatta a visualizzare programmi ricorrenti.
+È disponibile una scheda Lovelace autonoma, soltanto grafica, nel file
+`frontend/ariston-cube-weekly-card.js`, con guida in `frontend/README.md`.
+Non invia comandi e non crea uno schedule locale alternativo.
