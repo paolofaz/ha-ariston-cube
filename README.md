@@ -15,10 +15,10 @@ A new, minimal custom integration for the **Ariston CLAS ONE 30L + Cube S** via 
 - Configuration from **Settings > Devices & services > Add integration** (no YAML).
 - Token-based Ariston mobile API authentication and plant selection.
 - Token-authenticated asynchronous HTTP calls and 60-second coordinator polling.
-- Seven **read-only** entities: the original five sensors plus Cube S `climate`
-  and domestic-hot-water `water_heater` entities.
-- No writes, scheduling changes, gas conversions or automations. The climate and
-  water-heater controls in the Home Assistant UI are informational for now.
+- Five read-only temperature/status sensors, plus writable Cube S `climate`
+  and ACS `water_heater` entities (temperature setpoints only).
+- No automated writes, scheduling changes, mode changes, gas conversions or automations.
+  Temperature changes are sent only after an explicit Home Assistant service call.
 
 ## Installation for a separate test Home Assistant instance
 
@@ -75,7 +75,7 @@ was consulted to understand observed API identifiers and request patterns.
 The new implementation is independently structured and intentionally limited
 in scope. The cloud endpoints are unofficial and subject to change.
 
-## Milestone 2: read-only thermostat and hot water
+## Milestone 2: thermostat and hot water entities
 
 This branch displays two new Home Assistant entity types:
 
@@ -86,26 +86,24 @@ This branch displays two new Home Assistant entity types:
   available storage reading (if supported) and Ariston DHW mode; Comfort
   and Economy ACS settings are attributes.
 
-**They do not yet implement service calls to change temperature or mode.**
-Avoid controlling them through Home Assistant automations; continue to use the
-Cube S itself or the proven Ariston integration. No integration should impose
-a second schedule while the Cube S is managing its own time program.
+**As of 0.3.0, both expose setpoint services**. Mode changes are still unavailable.
+The thermostat write requires the Cube S to be in manual heating mode and does
+not change the weekly schedule. Avoid parallel automatic control loops with the
+older integration.
 
 The cloud plant's summer mode takes precedence over any zone setting.
 Unknown status is not silently presented as a valid operating state.
 
-## Future write safety (not activated)
+## Write safety
 
-`commands.py` now contains a pure, offline-tested builder for the established
-`dataItems/<plant>/set` JSON contract. It is **not imported or called by any
-entity or the HTTP client**. It checks a current server-side previous value,
-explicit server-provided minimum/maximum and temperature steps, local hard
-bounds, the fixed zone and active manual heating mode. It does not auto-retry
+`commands.py` validates each explicitly requested setpoint operation
+against the established `dataItems/<plant>/set` JSON contract. It checks a
+fresh previous value, cloud minimum/maximum and temperature step, local hard
+bounds, fixed zone and active manual heating mode. It does not auto-retry
 writes or alter the Cube S scheduler.
 
-Real writes require an intentionally separate, opt-in implementation and
-careful validation on the specific boiler; installing this branch still
-performs **read requests only**.
+The real command path is enabled from 0.3.0 but has not yet been confirmed on
+a live Cube S. Do not use the experimental entities in production automations.
 
 ## Home Assistant 2026.10 compatibility / troubleshooting
 
@@ -117,9 +115,9 @@ so this milestone deliberately uses the older, compatible names.
 To verify the new entities, open **Settings > Devices & services > Entities**
 or **Developer tools > States** and filter by `ariston_cube`, `climate.`
 and `water_heater.`. The physical device page is not guaranteed to show
-a **Controls** section because the new entities currently advertise no
-write-capable features (`supported_features=0`). They are *read-only*;
-that absence is not, by itself, an installation failure.
+a **Controls** section because the entity platforms failed to load or the installed version is stale.
+With 0.3.0 both new entities advertise a temperature setpoint feature, so a
+control panel should appear if they register successfully.
 
 Updating custom-component code requires a **full Home Assistant restart**,
 not just reload of the integration. The domain-specific logs must not show
@@ -130,14 +128,14 @@ The legacy `ariston` component is separate from `ariston_cube`. A
 request and can reflect gateway or rate issues. Avoid sustained parallel
 high-frequency polling against the same plant.
 
-## Verifying HA platform loading in 0.2.2
+## Verifying HA platform loading
 
 Enable `logger.logs.custom_components.ariston_cube: debug` and do a full
 Home Assistant restart. Logs now show whether the installed `__init__.py`
 actually uses all four platforms and whether Home Assistant invokes and
 accepts the `climate` and `water_heater` entities:
 
-- `Ariston Cube 0.2.2 starting; platforms=sensor, binary_sensor, climate, water_heater`
+- `Ariston Cube 0.3.0 starting; platforms=sensor, binary_sensor, climate, water_heater`
 - `Ariston Cube climate platform setup invoked`
 - `Ariston Cube climate entity added to Home Assistant`
 - `Ariston Cube water_heater platform setup invoked`
@@ -146,7 +144,7 @@ accepts the `climate` and `water_heater` entities:
 The absence of the first line means the old `__init__.py` may still be
 running. The absence of a platform or entity line distinguishes a platform
 loading failure from entity registration trouble. Check the
-`/config/custom_components/ariston_cube/manifest.json` version is 0.2.2.
+`/config/custom_components/ariston_cube/manifest.json` version is 0.3.0.
 The five previous sensors remain unchanged.
 
 ## Milestone 3: write test for temperature setpoints
