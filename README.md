@@ -407,3 +407,26 @@ attempt, **not proof** that the remote web portal is available to the
 specific account. If the web server continues returning 403, both web
 dependent features correctly remain unavailable. The mobile API, existing
 entity IDs, legacy Ariston integration and Recorder remain untouched.
+
+
+## 0.8.3 — Comfort ACS: same dropdown semantics as the legacy select
+
+The working R2 login and direct physical Smc readings are retained unchanged.
+Field logs for 0.8.2 show **only** the ACS Comfort web menu parser failing
+with `Unexpected ACS Comfort value`. The previous integration mapped
+`U6_9_2` through `dropDownOptions` (numeric value + localized text).
+0.8.3 accepts strictly recognized integer/decimal/decimal-string values,
+or an exact unique match of the web response to a declared option label.
+No arbitrary value guesses, and no reuse of unrelated mobile `DhwMode`.
+
+The binary Comfort ACS switch still writes **only** 0 OFF and 2 Always,
+with one verified write and no retry; a current timed mode (1) intentionally
+keeps the switch unavailable. If the server returns a different structure,
+an additional redacted `comfort_acs_menu_probe` reports only scalar kind
+and option-value types, not credentials or menu values. A select with all
+three modes may later be offered if the real valve is configured to TIME.
+
+The cloud weekly schedule continues to be readable but **not editable**:
+the historical custom integration only implements the ChZn1 GET route;
+there is no verified boiler-specific schedule write contract yet. Preserve
+the original Cube S plan and never send an experimental setter.
