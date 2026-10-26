@@ -48,10 +48,18 @@ def test_reads_real_smc_not_as_kwh():
     assert data["heating_smc_today"] != 99999.0
 
 
-def test_no_completed_bucket_before_2am():
-    result = smc.parse_smc_report(report(), NOW.replace(hour=1))
-    assert result["heating_smc_today"] is None
-    assert result["dhw_smc_2h"] is None
+def test_midnight_reports_yesterdays_last_22_to_00_bucket():
+    # The vendor's CurrentDay rolls over at 02:00, NOT midnight.
+    result = smc.parse_smc_report(report(), NOW.replace(day=27, hour=0))
+    assert result["reported_date"] == "2026-10-26"
+    assert result["completed_interval"] == "22:00–24:00"
+    assert result["heating_smc_today"] == 66.0
+    assert result["heating_smc_2h"] == 11.0
+    # At 02:00 CurrentDay begins the new calendar-day accumulation.
+    after = smc.parse_smc_report(report(), NOW.replace(day=27, hour=2))
+    assert after["reported_date"] == "2026-10-27"
+    assert after["completed_interval"] == "00:00–02:00"
+    assert after["heating_smc_today"] == 0.0
 
 
 def test_no_fabricated_zero_from_missing_or_bad_series():

@@ -18,7 +18,7 @@ def test_web_comfort_checks_phone_changes_within_fifteen_minutes():
 def test_smc_local_bihourly_refresh_is_unloaded_with_config_entry():
     sensor = (ROOT / "sensor.py").read_text()
     assert "async_track_time_change(" in sensor
-    assert "hour=tuple(range(2, 24, 2))" in sensor
+    assert "hour=tuple(range(0, 24, 2))" in sensor
     assert "minute=(10, 40)" in sensor
     assert "second=0" in sensor
     assert "entry.async_on_unload(unsubscribe)" in sensor
