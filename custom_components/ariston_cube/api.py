@@ -14,7 +14,8 @@ import aiohttp
 
 from .const import BASE_URL
 from .model import make_main_request, parse_main_data, as_temperature, parse_plants
-from .commands import CommandRejected, build_setpoint_request
+from .commands import CommandRejected, build_setpoint_request, build_zone_mode_request
+from .states import enum_code
 
 MOBILE_USER_AGENT = "RestSharp/106.11.7.0"
 
@@ -186,5 +187,38 @@ class AristonClient:
             if actual is None or abs(actual - float(value)) > 0.01:
                 raise AristonResponseError(
                     "Command submitted but not yet confirmed by cloud; do not repeat immediately"
+                )
+            return after
+
+
+    async def async_set_zone_mode(
+        self, plant_id: str, mode: int,
+    ) -> dict[str, dict[str, Any]]:
+        """Select OFF/MANUAL/SCHEDULE without changing the global plant mode."""
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            features = await self._load_features(plant_id)
+            read_path = f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si"
+            fresh = parse_main_data(await self._request(
+                "POST", read_path, json_body=make_main_request(features),
+            ))
+            request = build_zone_mode_request(fresh, features, mode)
+            if request is None:
+                return fresh
+            response = await self._request(
+                "POST", f"/api/v2/remote/dataItems/{plant_id}/set?umsys=si",
+                json_body=request,
+            )
+            if isinstance(response, dict) and (
+                response.get("success") is False or response.get("ok") is False
+            ):
+                raise AristonResponseError("Ariston refused zone mode")
+            after = parse_main_data(await self._request(
+                "POST", read_path, json_body=make_main_request(features),
+            ))
+            if enum_code(after.get("ZoneMode")) != mode:
+                raise AristonResponseError(
+                    "Mode sent but not yet confirmed; do not retry immediately"
                 )
             return after

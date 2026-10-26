@@ -11,6 +11,7 @@ thermostat.
 
 Entities:
 - `climate` Cube S: current and target room temperature, heating state,
+  explicit OFF/HEAT/AUTO zone-mode selection (when supported by cloud),
   and user-requested Comfort temperature with readback.
 - `number` ACS temperature: 36–60 °C cap, 1 °C steps. Dynamic server
   minimum/maximum are intersected with these bounds.
@@ -41,6 +42,7 @@ limits and local temperature caps, submits at most one
 then reads back the cloud result. An uncertain write is **never retried
 automatically**. The heating Comfort and Economy writes require manual
 heating mode, so the Cube S weekly schedule is not silently overwritten.
+AUTO selects the existing Cube S program rather than writing a new schedule.
 The existing weekly program remains the sole scheduling authority.
 
 ACS 36–60 °C is the preliminary tested user range; if Ariston reports more

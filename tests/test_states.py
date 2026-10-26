@@ -95,3 +95,11 @@ def test_holiday_mode_is_not_automatically_treated_as_off():
 def test_integral_float_mode_codes_are_allowed():
     assert states.enum_code({"value": 2.0}) == 2
     assert states.enum_code({"value": 2.5}) is None
+
+
+
+def test_mode_options_are_retained_for_verified_writes():
+    parsed = model.parse_main_data({"items": [
+        {"id": "ZoneMode", "zone": 1, "value": 3, "options": [0, 2, 3]},
+    ]})
+    assert parsed["ZoneMode"]["options"] == [0, 2, 3]

@@ -72,7 +72,7 @@ def parse_main_data(payload: Any, zone: int = 1) -> dict[str, dict[str, Any]]:
         else:
             continue
         parsed: dict[str, Any] = {"value": item["value"]}
-        for key in ("min", "max", "step", "unit"):
+        for key in ("min", "max", "step", "unit", "options"):
             if key in item:
                 parsed[key] = item[key]
         if isinstance(item.get("options"), list) and isinstance(item.get("optTexts"), list):

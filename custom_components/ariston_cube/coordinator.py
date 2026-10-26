@@ -50,3 +50,15 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             _LOGGER.warning("Ariston setpoint not confirmed: %s", exc)
             raise HomeAssistantError(str(exc)) from exc
         self.async_set_updated_data(after)
+
+
+    async def async_set_zone_mode(self, mode: int) -> None:
+        """One explicit zone-mode write, never a plant-mode change."""
+        try:
+            after = await self.client.async_set_zone_mode(self.plant_id, mode)
+        except CommandRejected as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        except AristonError as exc:
+            _LOGGER.warning("Ariston heating mode not confirmed: %s", exc)
+            raise HomeAssistantError(str(exc)) from exc
+        self.async_set_updated_data(after)

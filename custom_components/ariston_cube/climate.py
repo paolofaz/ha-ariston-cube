@@ -30,7 +30,7 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
 
     _attr_name = "Cube S"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
     _attr_target_temperature_step = 0.5
     _attr_min_temp = 10
@@ -55,7 +55,11 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode | None:
         mode = heating_mode(self.coordinator.data)
-        return HVACMode.HEAT if mode == "heat" else HVACMode.OFF if mode == "off" else None
+        if mode == "off":
+            return HVACMode.OFF
+        if mode == "heat" and zone_program(self.coordinator.data) == "time_program":
+            return HVACMode.AUTO
+        return HVACMode.HEAT if mode == "heat" else None
 
     @property
     def hvac_action(self) -> HVACAction | None:
@@ -96,4 +100,12 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
         )
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        raise HomeAssistantError("Ariston Cube cannot change heating mode yet")
+        """OFF/HEAT/AUTO affect only the Cube S zone, not the plant."""
+        option = {
+            HVACMode.OFF: 0,
+            HVACMode.HEAT: 2,
+            HVACMode.AUTO: 3,
+        }.get(hvac_mode)
+        if option is None:
+            raise HomeAssistantError("Unsupported heating mode")
+        await self.coordinator.async_set_zone_mode(option)

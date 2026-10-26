@@ -259,3 +259,54 @@ def test_write_accepted_but_readback_mismatch_is_not_retried():
         assert False, "Expected non-confirmation warning"
     run(scenario())
     assert sum("/set?" in url for _, url, _ in session.calls) == 1
+
+
+
+def _mode_items(zone_mode=2, options=None, plant=1):
+    return {"items": [
+        {"id": "PlantMode", "zone": 0, "value": plant},
+        {"id": "ZoneMode", "zone": 1, "value": zone_mode,
+         "options": [0, 2, 3] if options is None else options},
+        {"id": "ZoneMeasuredTemp", "zone": 1, "value": 20},
+    ]}
+
+
+def test_mode_auto_uses_zone_only_once_and_readback():
+    session = Session(
+        Response({"token": "x"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_mode_items(zone_mode=2)),
+        Response(None),
+        Response(_mode_items(zone_mode=3)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_set_zone_mode("GW123", 3)
+        assert result["ZoneMode"]["value"] == 3
+    run(scenario())
+    writes = [(url, opts["json"]) for method, url, opts in session.calls
+              if "/dataItems/" in url and "/set?" in url]
+    assert len(writes) == 1
+    assert writes[0][1]["items"] == [
+        {"id": "ZoneMode", "zone": 1, "prevValue": 2, "value": 3}
+    ]
+
+
+def test_mode_no_unsupported_transition_when_options_absent():
+    session = Session(
+        Response({"token": "x"}),
+        Response({"zones": [{"num": 1}]}),
+        Response({"items": [
+            {"id": "PlantMode", "zone": 0, "value": 1},
+            {"id": "ZoneMode", "zone": 1, "value": 2},
+        ]}),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_set_zone_mode("GW123", 3)
+        except api.CommandRejected:
+            return
+        assert False, "Expected fail-closed for absent mode options"
+    run(scenario())
+    assert not any("/set?" in url for _, url, _ in session.calls)

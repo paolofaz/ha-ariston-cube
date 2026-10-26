@@ -104,3 +104,45 @@ def build_setpoint_request(
         }],
         "features": features,
     }
+
+
+def build_zone_mode_request(
+    snapshot: dict[str, dict[str, Any]],
+    features: dict[str, Any],
+    new_mode: int,
+) -> dict[str, Any] | None:
+    """Allow only explicit zone mode changes, retaining the plant mode.
+
+    0=off, 2=manual heating, 3=use Cube S's own weekly schedule. Server
+    mode-option lists are mandatory: an absent list must never be guessed.
+    """
+    if type(new_mode) is not int or new_mode not in (0, 2, 3):
+        raise CommandRejected("Unsupported Cube S heating mode")
+    if enum_code(snapshot.get("PlantMode")) not in (1, 2):
+        raise CommandRejected("Heating can be changed only with plant in winter/heating mode")
+    current = snapshot.get("ZoneMode")
+    if not isinstance(current, dict):
+        raise CommandRejected("Missing Cube S zone mode")
+    old = enum_code(current)
+    if old not in (0, 1, 2, 3):
+        raise CommandRejected("Unsupported current Cube S mode")
+    options = current.get("options")
+    if not isinstance(options, list) or not options:
+        raise CommandRejected("Available heating modes have not been reported by Ariston")
+    allowed = set()
+    for option in options:
+        parsed = enum_code({"value": option})
+        if parsed is not None:
+            allowed.add(parsed)
+    if new_mode not in allowed:
+        raise CommandRejected("Selected mode not available on this Cube S")
+    if not isinstance(features, dict) or not features:
+        raise CommandRejected("Cloud device features not available")
+    if new_mode == old:
+        return None
+    return {
+        "items": [{
+            "id": "ZoneMode", "zone": 1, "prevValue": old, "value": new_mode,
+        }],
+        "features": features,
+    }

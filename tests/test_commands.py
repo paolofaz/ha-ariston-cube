@@ -89,3 +89,22 @@ def test_comfort_setpoint_write_requires_manual_zone_and_heat_plant():
     for state in (snapshot(ZoneMode={"value": 3}), snapshot(PlantMode={"value": 0})):
         with pytest.raises(commands.CommandRejected, match="mode"):
             commands.build_setpoint_request(state, FEATURES, "ZoneComfortTemp", 21.5)
+
+
+
+def test_zone_mode_request_safe_for_manual_to_auto():
+    readings = snapshot(ZoneMode={"value": 2, "options": [0, 2, 3]})
+    body = commands.build_zone_mode_request(readings, FEATURES, 3)
+    assert body["items"] == [{"id": "ZoneMode", "zone": 1,
+                              "prevValue": 2, "value": 3}]
+    assert commands.build_zone_mode_request(readings, FEATURES, 2) is None
+
+
+def test_zone_mode_rejects_options_missing_or_summer_plant():
+    for readings in [
+        snapshot(ZoneMode={"value": 2}),
+        snapshot(PlantMode={"value": 0}, ZoneMode={"value": 2, "options": [0, 2, 3]}),
+        snapshot(ZoneMode={"value": 2, "options": [0, 2]}),
+    ]:
+        with pytest.raises(commands.CommandRejected):
+            commands.build_zone_mode_request(readings, FEATURES, 3)
