@@ -48,7 +48,7 @@ def parse_plants(payload: Any) -> list[dict[str, str]]:
 
 
 def make_main_request(features: dict[str, Any], zone: int = 1) -> dict[str, Any]:
-    """Request only values needed for first read-only milestone."""
+    """Request supported observed values, including optional boiler telemetry."""
     if not isinstance(features, dict):
         raise ValueError("Invalid features")
     if zone < 1:

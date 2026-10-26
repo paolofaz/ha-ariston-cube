@@ -253,3 +253,18 @@ against the existing Ariston integration before treating them as finalized.
 The existing Recorder entity IDs/statistics are not changed or migrated.
 Gas volume (Smc/m³) requires separate unit validation and conversion, so
 this release does not pretend these are cubic meters.
+
+
+## Remaining integration work
+
+- ACS **Comfort preheat** OFF / Sempre attivo needs mobile access to the
+  *actual* `U6_9_2` parameter, not guessed `DhwMode` commands. The
+  previously rejected web login does not establish a supported mobile
+  setter.
+- Editing and saving the **original Cube S weekly plans** is pending a
+  confirmed `ChZn1` write contract. The Home Assistant calendar introduced
+  in 0.7.0 is expressly read-only; adding an event does not change the boiler.
+- Only **last month's** two separate gas reports are exposed, in kWh, for
+  comparison with the legacy entities. These values are **not** lifetime
+  meters and must not be renamed to replace long-term Recorder statistics.
+  No change to the existing Recorder database has been attempted.

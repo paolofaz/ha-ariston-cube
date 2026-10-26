@@ -137,3 +137,14 @@ def test_platforms_emit_setup_and_entity_registration_diagnostics(filename, doma
     assert f"Ariston Cube {domain} entity added to Home Assistant" in source
     assert "async def async_added_to_hass(self)" in source
     assert "await super().async_added_to_hass()" in source
+
+
+
+def test_release_marker_and_diagnostics_format_are_consistent():
+    import json
+    manifest = json.loads((ROOT / "manifest.json").read_text())
+    source = (ROOT / "__init__.py").read_text()
+    diag = (ROOT / "diagnostics.py").read_text()
+    assert manifest["version"] == "0.7.0"
+    assert "Ariston Cube 0.7.0 starting" in source
+    assert '"version": "0.7.0"' in diag
