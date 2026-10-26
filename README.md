@@ -532,3 +532,40 @@ Raw Smc report entities remain independent and carry a `giorno_riferimento`
 attribute showing the vendor's actual report date. Cumulative entities
 start their own new history; old Recorder Energy statistics are not
 automatically transferred. Main branch and legacy integration untouched.
+
+## 0.8.7 — one-night physical Smc investigation (no live Energy totals)
+
+The historic MOBILE kWh daily total showed an unusual repeated 22-00
+amount at 02:00. That does NOT prove the new WEB asPhysicalUnit Smc
+histogram behaves the same. This diagnostic build records evidence from
+the web histogram before changing accounting assumptions.
+
+One temporary HA diagnostic sensor is created:
+**Verifica notturna consumi Smc**. It is read-only and uses the SAME
+web report already fetched for the four previously verified Smc sensors.
+There are NO additional cloud requests or boiler commands.
+
+At scheduled reads 22:10, 22:40, 00:10, 00:40, 02:10, 02:40,
+04:10 and 04:40, the integration stores the complete 12-slot numeric
+histogram arrays, **separately for Heating and Dhw**, for the permitted
+CurrentDay/PreviousDay report periods. Each snapshot includes a
+timezone-aware capture timestamp and local date. No gateway ID,
+account information, credentials, raw cloud payload, cookie or URL is saved.
+Snapshots are bounded to 18 records and 40 hours in Home Assistant's
+persistent .storage. They survive Home Assistant restarts.
+
+Tomorrow, under Developer tools > States, find the new sensor and
+inspect its `istantanee` attribute. Alternatively export HA's
+Ariston Cube diagnostics and look at `night_smc_snapshots`.
+The arrays are ordered slots 0=00-02, 1=02-04 ... 11=22-00. Compare
+raw web reports at midnight and just after 02:00 before deciding
+whether there is a carried-over bucket, a repeated label, or a
+true additional gas consumption.
+
+Important: The experimental cumulative Smc entities introduced in
+0.8.5/0.8.6 are NOT CREATED or updated in this build. The
+persisted gas ledger is also suspended. This prevents misleading
+long-term HA Energy statistics while we establish the cloud behavior.
+The four raw Smc sensors and working ACS Comfort switch are unchanged.
+The legacy Ariston integration, existing Recorder data and main branch
+remain untouched. This is a data-gathering build, not an RC.
