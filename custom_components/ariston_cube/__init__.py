@@ -17,7 +17,7 @@ PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform
 
 async def async_setup_entry(hass, entry) -> bool:
     """Use a token-authenticated client and fetch the initial snapshot."""
-    _LOGGER.info("Ariston Cube 0.2.2 starting; platforms=%s", ", ".join(p.value for p in PLATFORMS))
+    _LOGGER.info("Ariston Cube 0.2.2 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
     session = async_get_clientsession(hass)
     client = AristonClient(session, entry.data["username"], entry.data["password"])
     coordinator = AristonCoordinator(hass, entry, client)
