@@ -19,7 +19,7 @@ from yarl import URL
 from .const import BASE_URL
 
 _TOKEN_RE = re.compile(
-    r'name=["\']__RequestVerificationToken["\'][^>]*value=["\']([^"\']+)',
+    r"""<input\b(?=[^>]*\bname=["']__RequestVerificationToken["'])(?=[^>]*\bvalue=["']([^"']+)["'])[^>]*>""",
     flags=re.IGNORECASE,
 )
 _XHR_HEADERS = {
