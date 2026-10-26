@@ -1,0 +1,51 @@
+{
+  "title": "Ariston Cube",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connetti Ariston NET",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "plant": {
+        "title": "Seleziona caldaia",
+        "data": {
+          "plant_id": "Caldaia"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Autenticazione non riuscita",
+      "cannot_connect": "Impossibile raggiungere Ariston NET",
+      "invalid_response": "Risposta imprevista da Ariston NET",
+      "no_plants": "Nessuna caldaia trovata per questo account",
+      "unknown": "Selezione caldaia non valida"
+    },
+    "abort": {
+      "already_configured": "Questa caldaia è già configurata"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "room_temperature": {
+        "name": "Temperatura ambiente"
+      },
+      "heating_setpoint": {
+        "name": "Temperatura impostata riscaldamento"
+      },
+      "dhw_setpoint": {
+        "name": "Temperatura impostata ACS"
+      }
+    },
+    "binary_sensor": {
+      "heat_request": {
+        "name": "Richiesta riscaldamento"
+      },
+      "flame": {
+        "name": "Fiamma"
+      }
+    }
+  }
+}
