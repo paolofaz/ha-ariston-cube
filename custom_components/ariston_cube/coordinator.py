@@ -38,11 +38,13 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         except (AristonError, ValueError) as exc:
             raise UpdateFailed("Unable to refresh Ariston data") from exc
 
-    async def async_set_setpoint(self, item_id: str, value: float) -> None:
+    async def async_set_setpoint(
+        self, item_id: str, value: float, *, require_manual: bool = False
+    ) -> None:
         """Run one user-initiated write and publish only verified readback."""
         try:
             after = await self.client.async_set_setpoint(
-                self.plant_id, item_id, value
+                self.plant_id, item_id, value, require_manual=require_manual
             )
         except CommandRejected as exc:
             raise HomeAssistantError(str(exc)) from exc

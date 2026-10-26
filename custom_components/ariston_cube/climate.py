@@ -96,7 +96,7 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
         # The official Ariston GALEVO client changes ZoneComfortTemp, not
         # ZoneDesiredTemp. Require heating/manual mode to preserve schedules.
         await self.coordinator.async_set_setpoint(
-            "ZoneComfortTemp", kwargs[ATTR_TEMPERATURE]
+            "ZoneComfortTemp", kwargs[ATTR_TEMPERATURE], require_manual=True
         )
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:

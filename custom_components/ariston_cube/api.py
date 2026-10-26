@@ -151,6 +151,7 @@ class AristonClient:
 
     async def async_set_setpoint(
         self, plant_id: str, item_id: str, value: float,
+        *, require_manual: bool = False,
     ) -> dict[str, dict[str, Any]]:
         """Single validated write from a fresh reading, followed by verification.
 
@@ -166,7 +167,9 @@ class AristonClient:
                 "POST", read_path, json_body=make_main_request(features),
             )
             fresh = parse_main_data(fresh_payload)
-            request = build_setpoint_request(fresh, features, item_id, value)
+            request = build_setpoint_request(
+                fresh, features, item_id, value, require_manual=require_manual
+            )
             if request is None:
                 return fresh  # unchanged: no POST to the write endpoint
 

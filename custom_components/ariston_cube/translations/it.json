@@ -58,6 +58,9 @@
       },
       "heating_economy": {
         "name": "Temperatura Economy riscaldamento"
+      },
+      "heating_comfort": {
+        "name": "Temperatura Comfort riscaldamento"
       }
     }
   }

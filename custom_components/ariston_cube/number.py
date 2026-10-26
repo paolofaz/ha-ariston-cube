@@ -1,4 +1,4 @@
-"""Numeric controls for ACS and Cube S Economy temperature.
+"""Numeric controls for ACS and Cube S Comfort/Economy temperatures.
 
 Only temperature-setting cloud dataItems with confirmed device limits are
 presented. There is no second climate/water_heater entity for domestic hot water.
@@ -22,11 +22,12 @@ _LOGGER = logging.getLogger(__name__)
 _NUMBERS: tuple[tuple[str, str, float, float, float], ...] = (
     ("DhwTemp", "acs_temperature", 36.0, 60.0, 1.0),
     ("ZoneEconomyTemp", "heating_economy", 10.0, 30.0, 0.5),
+    ("ZoneComfortTemp", "heating_comfort", 10.0, 30.0, 0.5),
 )
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Register numeric controls for ACS and Economy mode."""
+    """Register numeric controls for ACS, Comfort and Economy."""
     _LOGGER.info("Ariston Cube number platform setup invoked")
     async_add_entities(
         AristonCubeNumber(entry.runtime_data, field, key, lower, upper, step)
@@ -87,7 +88,7 @@ class AristonCubeNumber(AristonEntity, NumberEntity):
     @property
     def native_step(self) -> float:
         # ACS must always be whole-degree steps even if cloud is more granular.
-        # Heater economy uses the device's step when it is a safe multiple of 0.5.
+        # Comfort/Economy use the device's step when it is a safe multiple of 0.5.
         if self._field == "DhwTemp":
             return 1.0
         item = self.coordinator.data.get(self._field) or {}
@@ -113,4 +114,7 @@ class AristonCubeNumber(AristonEntity, NumberEntity):
             raise HomeAssistantError("Ariston has not supplied the current value")
         if not self.native_min_value <= value <= self.native_max_value:
             raise HomeAssistantError("Target temperature outside valid limits")
+        # Prevent calls with an unsupported increment even if made outside the UI.
+        if not math.isfinite(value) or abs(value / self.native_step - round(value / self.native_step)) > 1e-6:
+            raise HomeAssistantError("Target temperature is not on a valid step")
         await self.coordinator.async_set_setpoint(self._field, value)

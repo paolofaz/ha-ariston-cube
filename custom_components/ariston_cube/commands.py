@@ -32,6 +32,8 @@ def build_setpoint_request(
     features: dict[str, Any],
     item_id: str,
     new_value: float,
+    *,
+    require_manual: bool = False,
 ) -> dict[str, Any] | None:
     """Build the /dataItems/<plant>/set JSON body with strict safety guards.
 
@@ -72,6 +74,10 @@ def build_setpoint_request(
         raise CommandRejected("Invalid device temperature limits")
     if not max(hard_min, lower) <= new <= min(hard_max, upper):
         raise CommandRejected("Temperature outside validated device limits")
+    # Device-specific UI and cloud contract both enforce increments.
+    resolution_cap = 1.0 if item_id == "DhwTemp" else 0.5
+    if abs(new / resolution_cap - round(new / resolution_cap)) > 1e-5:
+        raise CommandRejected("Temperature does not match the configured increment")
     if old_value == new:
         return None
 
@@ -89,9 +95,10 @@ def build_setpoint_request(
         if abs(multiple - round(multiple)) > 1e-5:
             raise CommandRejected("Requested temperature is not on a supported step")
 
-    # A manual target is not meaningful while Cube S follows its own weekly
-    # program; schedule overrides need separate, explicitly verified logic.
-    if item_id in ("ZoneDesiredTemp", "ZoneComfortTemp"):
+    # The Climate dial controls the active room temperature and requires manual
+    # mode. A separate Comfort number edits the stored Comfort preset even
+    # while AUTO is active, without overriding the Cube S's weekly schedule.
+    if item_id == "ZoneDesiredTemp" or (item_id == "ZoneComfortTemp" and require_manual):
         if enum_code(snapshot.get("ZoneMode")) != 2:
             raise CommandRejected("Manual heating mode is required")
         if enum_code(snapshot.get("PlantMode")) not in (1, 2):

@@ -2,7 +2,7 @@
 
 Experimental custom integration for **Ariston CLAS ONE 30L + Cube S** via the Ariston NET mobile API.
 
-## Version 0.4.1 — practical controls
+## Version 0.5.0 — Comfort/Economy controls and local branding
 
 Login and the five original sensors were tested on the real boiler. The Cube S
 `climate` temperature setting was also tested successfully on 2026-10-26.
@@ -16,7 +16,9 @@ Entities:
 - `number` ACS temperature: 36–60 °C cap, 1 °C steps. Dynamic server
   minimum/maximum are intersected with these bounds.
 - `number` heating Economy temperature: 10–30 °C cap, 0.5 °C steps,
-  shown only when the cloud supplies a valid current value.
+  with narrower cloud limits taking precedence.
+- `number` heating Comfort temperature: 10–30 °C cap, 0.5 °C steps,
+  reflecting the Cube S's `ZoneComfortTemp` preset.
 - The original three temperature sensors and two binary sensors remain and
   keep their unique IDs.
 
@@ -32,7 +34,7 @@ migrate Recorder history.
 Download ZIP from `feat/initial-readonly-integration`. Copy
 `custom_components/ariston_cube` over `/config/custom_components/ariston_cube`
 and **restart the whole Home Assistant container**. There is no need to
-delete and re-add the Ariston Cube config entry. Verify manifest version 0.4.1.
+delete and re-add the Ariston Cube config entry. Verify manifest version 0.5.0.
 
 ## Safeguards for controls
 
@@ -40,8 +42,9 @@ The client performs one fresh authenticated read, validates both server-side
 limits and local temperature caps, submits at most one
 `/api/v2/remote/dataItems/{plant}/set` request using the previous value,
 then reads back the cloud result. An uncertain write is **never retried
-automatically**. The heating Comfort and Economy writes require manual
-heating mode, so the Cube S weekly schedule is not silently overwritten.
+automatically**. The Climate dial requires manual heating mode to change the **active** target.
+The independent Comfort/Economy number entities edit stored presets even when
+AUTO is running, without changing the Cube S weekly time programme.
 AUTO selects the existing Cube S program rather than writing a new schedule.
 The existing weekly program remains the sole scheduling authority.
 
@@ -108,3 +111,22 @@ we can implement a persistent deduplicating accumulator for CH/DHW and a third
 electricity sensor only if its actual semantics are verified. The same
 diagnostics will let us read the exact weekly schedule without building a
 competing clock in HA.
+
+## Brand icon (Home Assistant 2026.3+)
+
+`custom_components/ariston_cube/brand/icon.png` contains the supplied house
+symbol (squared and optimized to 256×256 with transparency). Modern Home
+Assistant instances show local custom-integration brand assets automatically.
+The HACS catalog may still show its generic placeholder due to its own
+image-loading limitations; the Home Assistant integration/device page should
+pick up this local icon following a full restart.
+
+## Clarification: Comfort vs the Climate temperature
+
+The separate Comfort number is the `ZoneComfortTemp` setting, the **same field
+written by the Cube S climate dial when manual heating is active**. The Climate
+entity *reads* `ZoneDesiredTemp`, the effective target temperature. The two
+can differ during AUTO because the Cube S time programme can select Economy.
+The new Comfort number allows adjusting the preset without switching away
+from AUTO. All numeric inputs are capped at 10–30 °C even if cloud metadata
+announces a wider range.
