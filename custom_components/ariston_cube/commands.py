@@ -21,7 +21,7 @@ _ALLOWED_SETPOINTS: dict[str, tuple[int, float, float]] = {
     "ZoneDesiredTemp": (1, 10.0, 30.0),
     "ZoneComfortTemp": (1, 10.0, 30.0),
     "ZoneEconomyTemp": (1, 10.0, 30.0),
-    "DhwTemp": (0, 35.0, 65.0),
+    "DhwTemp": (0, 36.0, 60.0),
     "DhwTimeProgComfortTemp": (0, 35.0, 65.0),
     "DhwTimeProgEconomyTemp": (0, 35.0, 65.0),
 }

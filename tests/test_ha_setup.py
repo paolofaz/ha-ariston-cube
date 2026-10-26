@@ -90,7 +90,7 @@ def test_async_setup_entry_reports_success_and_forwards_four_platforms(monkeypat
 
     assert asyncio.run(integration.async_setup_entry(hass, entry)) is True
     assert entry.runtime_data.first_refresh_called
-    assert set(platforms) == {"sensor", "binary_sensor", "climate", "water_heater"}
+    assert set(platforms) == {"sensor", "binary_sensor", "climate", "number"}
 
 
 def test_setup_does_not_return_none(monkeypatch):

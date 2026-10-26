@@ -52,9 +52,12 @@
         "name": "Cube S"
       }
     },
-    "water_heater": {
-      "acs": {
-        "name": "Acqua calda sanitaria"
+    "number": {
+      "acs_temperature": {
+        "name": "Hot water temperature"
+      },
+      "heating_economy": {
+        "name": "Heating Economy temperature"
       }
     }
   }
