@@ -76,15 +76,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
     # Ariston publishes its completed two-hour gas buckets on local-clock
-    # boundaries. Read at :10 and :40 after each even hour, independent of
-    # when Home Assistant last restarted. Skip 00:xx because the CurrentDay
-    # report cannot yet include the current day's first completed slot.
+    # boundaries. Read at :10 and :40 after every even hour including
+    # midnight, while the 22:00–00:00 bucket remains available until 02:00.
+    # This avoids missing the final day bucket during the 02:00 reset.
     async def _refresh_smc(_now):
         await smc.async_refresh()
 
     unsubscribe = async_track_time_change(
         hass, _refresh_smc,
-        hour=tuple(range(2, 24, 2)),
+        hour=tuple(range(0, 24, 2)),
         minute=(10, 40),
         second=0,
     )
@@ -190,9 +190,13 @@ class AristonPhysicalGas(AristonEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        if self._source_key.endswith("_2h") and self.coordinator.data:
-            return {"fascia_completata": self.coordinator.data.get("completed_interval")}
-        return {}
+        data = self.coordinator.data
+        if not data:
+            return {}
+        attributes = {"giorno_riferimento": data.get("reported_date")}
+        if self._source_key.endswith("_2h_smc"):
+            attributes["fascia_completata"] = data.get("completed_interval")
+        return attributes
 
     @property
     def available(self) -> bool:

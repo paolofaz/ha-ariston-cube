@@ -7,7 +7,7 @@ one for each local 00:00–24:00 interval, with source 'series' names.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import math
 from typing import Any
 
@@ -17,6 +17,7 @@ def parse_smc_report(payload: Any, now: datetime) -> dict[str, Any]:
         "heating_smc_today": None, "dhw_smc_today": None,
         "heating_smc_2h": None, "dhw_smc_2h": None,
         "completed_interval": None,
+        "reported_date": None,
     }
     if not isinstance(payload, dict) or now.tzinfo is None or now.utcoffset() is None:
         return result
@@ -26,9 +27,12 @@ def parse_smc_report(payload: Any, now: datetime) -> dict[str, Any]:
     histogram = physical.get("histogramData")
     if not isinstance(histogram, list):
         return result
-    finished = now.hour // 2 - 1
-    if finished < 0:
-        return result
+    # Ariston keeps yesterday's CurrentDay visible from midnight until
+    # the 02:00 reset. The 22:00–00:00 slot arrives at 00:00.
+    previous_report_day = now.hour < 2
+    finished = 11 if previous_report_day else now.hour // 2 - 1
+    reference_date = now.date() - timedelta(days=1) if previous_report_day else now.date()
+    result["reported_date"] = reference_date.isoformat()
     result["completed_interval"] = f"{2*finished:02}:00–{2*finished+2:02}:00"
     for cloud_name, key in (("Heating", "heating"), ("Dhw", "dhw")):
         matches = [
