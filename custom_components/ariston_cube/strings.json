@@ -37,6 +37,9 @@
       },
       "dhw_setpoint": {
         "name": "Hot water setpoint"
+      },
+      "weekly_program": {
+        "name": "Cube S weekly programme"
       }
     },
     "binary_sensor": {

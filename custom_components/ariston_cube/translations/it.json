@@ -37,6 +37,9 @@
       },
       "dhw_setpoint": {
         "name": "Temperatura impostata ACS"
+      },
+      "weekly_program": {
+        "name": "Programma settimanale Cube S"
       }
     },
     "binary_sensor": {

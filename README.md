@@ -179,3 +179,26 @@ PENDING: the legacy DHW comfort/preheat function is web-menu parameter
 U6_9_2 via /R2/PlantMenu/Submit, NOT the mobile API's DhwMode. Because
 web login previously returned 403, no potentially misleading switch has
 been created to toggle DhwMode in its place. Read-only investigation first.
+
+
+## 0.6.1 — Cube S weekly programme (read-only)
+
+A new sensor, **Programma settimanale Cube S**, shows the actual Ariston
+weekly programme in Italian weekday attributes. Each daily attribute lists
+start times and Comfort/Economy presets. Missing weekdays remain unknown;
+unrecognised schedules are rejected rather than misrepresented.
+
+The sensor uses a **separate coordinator refreshing every three hours**.
+Its first refresh runs as a config-entry-scoped background task, so a slow
+schedule query or a cloud 500 cannot block the original temperature, number,
+switch, select or climate platforms. It does not send scheduling commands or
+replace the Cube S timetable.
+
+The 0.6.0 diagnostic export demonstrated 3 real weekly plans with daily
+`days` and `slices` structures. The source's weekday numbering is
+Sunday=0, Monday=1 ... Saturday=6, as the original Ariston integration
+defines. These readings have not yet been on-device validated in 0.6.1.
+
+The energy inventory reports 6 usage-code families each across 4 period
+categories, but without actual units or persisted meter semantics we still
+do not expose lifetime counters or create Energy Dashboard entities.
