@@ -505,3 +505,30 @@ database rewrite or unsafe ID reassignment is done.
 
 No merge to main or release candidate while this accounting path remains
 untested on the boiler. Cube S timetable writes also remain unverified.
+
+## 0.8.6 — midnight gas-report day identity corrected
+
+Field observation: the original Ariston 'CurrentDay' total still belongs
+to the previous calendar day from 00:00 until the daily report switches
+at **02:00**. The 22:00-00:00 Smc bucket is published at midnight.
+The integration now polls Smc at 00:10 and 00:40, too. During 00:00-02:00
+it attributes CurrentDay's final 12 buckets to **yesterday**.
+At 02:10 it resumes CurrentDay as today's 00:00-02:00 interval; the
+persistent totals NEVER reset when the vendor's daily report resets.
+
+A slot is keyed by exact calendar date + usage (heating/DHW) + 0..11
+two-hour bucket index: adjacent slots can hold identical values and
+both contribute, whereas rereading the same slot adds nothing.
+Cloud corrections within a bucket apply only the signed difference.
+
+Persistence and outage limits: the ledger stores each observed slot before
+publishing the Energy-compatible state. If HA is offline across the 00-02
+window, the final 22-00 bucket can only be reconstructed if the gateway
+also provides a real PreviousDay report. Otherwise the lifetime total
+is withheld instead of silently missing gas volume. This has NOT yet
+been field-tested across midnight on this particular installation.
+
+Raw Smc report entities remain independent and carry a `giorno_riferimento`
+attribute showing the vendor's actual report date. Cumulative entities
+start their own new history; old Recorder Energy statistics are not
+automatically transferred. Main branch and legacy integration untouched.

@@ -29,4 +29,4 @@ def test_lovelace_dependency_declared_and_versioned():
     assert "frontend" in manifest["dependencies"]
     assert "http" in manifest["dependencies"]
     assert "lovelace" in manifest["after_dependencies"]
-    assert manifest["version"] == "0.8.5"
+    assert manifest["version"] == "0.8.6"

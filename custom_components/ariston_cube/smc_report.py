@@ -33,7 +33,7 @@ def parse_smc_report(payload: Any, now: datetime) -> dict[str, Any]:
     finished = 11 if previous_report_day else now.hour // 2 - 1
     reference_date = now.date() - timedelta(days=1) if previous_report_day else now.date()
     result["reported_date"] = reference_date.isoformat()
-    result["completed_interval"] = f"{2*finished:02}:00–{2*finished+2:02}:00"
+    result["completed_interval"] = f"{2*finished:02}:00–{(2*finished+2)%24:02}:00"
     for cloud_name, key in (("Heating", "heating"), ("Dhw", "dhw")):
         matches = [
             row for row in histogram

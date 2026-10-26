@@ -52,7 +52,7 @@ def test_midnight_reports_yesterdays_last_22_to_00_bucket():
     # The vendor's CurrentDay rolls over at 02:00, NOT midnight.
     result = smc.parse_smc_report(report(), NOW.replace(day=27, hour=0))
     assert result["reported_date"] == "2026-10-26"
-    assert result["completed_interval"] == "22:00–24:00"
+    assert result["completed_interval"] == "22:00–00:00"
     assert result["heating_smc_today"] == 66.0
     assert result["heating_smc_2h"] == 11.0
     # At 02:00 CurrentDay begins the new calendar-day accumulation.
