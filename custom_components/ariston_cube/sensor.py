@@ -3,7 +3,7 @@
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
-from homeassistant.const import UnitOfTemperature, UnitOfPressure
+from homeassistant.const import UnitOfTemperature, UnitOfPressure, UnitOfVolume
 
 from .entity import AristonEntity
 from .model import as_temperature
@@ -64,12 +64,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     schedule = get_or_create_weekly_coordinator(hass, entry)
     entities = [AristonTemperature(coordinator, description) for description in DESCRIPTIONS]
     entities.append(AristonWeeklySchedule(schedule))
-    smc = AristonSmcCoordinator(hass, coordinator)
+    smc = AristonSmcCoordinator(hass, coordinator, entry_id=entry.entry_id)
     entities.extend([
         AristonPhysicalGas(smc, "heating_smc_today", "heating_smc_today"),
         AristonPhysicalGas(smc, "dhw_smc_today", "dhw_smc_today"),
         AristonPhysicalGas(smc, "heating_smc_2h", "heating_smc_2h"),
         AristonPhysicalGas(smc, "dhw_smc_2h", "dhw_smc_2h"),
+        AristonCumulativeGas(smc, "total_heating_smc", "heating_gas_cumulative"),
+        AristonCumulativeGas(smc, "total_dhw_smc", "dhw_gas_cumulative"),
     ])
     async_add_entities(entities)
 
@@ -191,6 +193,39 @@ class AristonPhysicalGas(AristonEntity, SensorEntity):
         if self._source_key.endswith("_2h") and self.coordinator.data:
             return {"fascia_completata": self.coordinator.data.get("completed_interval")}
         return {}
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.native_value is not None
+
+
+
+class AristonCumulativeGas(AristonEntity, SensorEntity):
+    """Persistent gas amount in m³ at standard conditions (Smc)."""
+
+    _attr_device_class = SensorDeviceClass.GAS
+    _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_icon = "mdi:meter-gas"
+
+    def __init__(self, coordinator, source_key: str, translation_key: str):
+        super().__init__(coordinator, "cumulative_gas_" + source_key)
+        self._source_key = source_key
+        self._attr_translation_key = translation_key
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        return data.get(self._source_key) if data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        return {
+            "volume_reference": "standard conditions (Smc)",
+            "histogram_previous_day_verified": data.get("history_complete", False),
+            "histogram_periods": data.get("observed_periods", []),
+        }
 
     @property
     def available(self) -> bool:

@@ -64,6 +64,12 @@
       },
       "dhw_smc_2h": {
         "name": "Gas ACS fascia conclusa Smc"
+      },
+      "heating_gas_cumulative": {
+        "name": "Gas riscaldamento cumulativo (Smc)"
+      },
+      "dhw_gas_cumulative": {
+        "name": "Gas ACS cumulativo (Smc)"
       }
     },
     "binary_sensor": {

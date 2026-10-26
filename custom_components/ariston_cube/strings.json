@@ -64,6 +64,12 @@
       },
       "dhw_smc_2h": {
         "name": "Hot water gas last completed 2h Smc"
+      },
+      "heating_gas_cumulative": {
+        "name": "Heating gas cumulative, standard cubic meters"
+      },
+      "dhw_gas_cumulative": {
+        "name": "Hot water gas cumulative, standard cubic meters"
       }
     },
     "binary_sensor": {
