@@ -288,6 +288,30 @@ class AristonClient:
             return after
 
 
+
+    async def async_probe_dhw_comfort_menu(self, plant_id: str) -> Any:
+        """Read U6_9_2 via the two legacy *read* endpoints, on demand only.
+
+        This intentionally does not attempt the unverified login or make any
+        write; an unavailable/unauthorized result proves no control support.
+        """
+        paths = (
+            f"/R2/PlantMenu/Refresh?id={plant_id}&paramIds=U6_9_2",
+            f"/Menu/User/Refresh/{plant_id}?paramIds=U6_9_2",
+        )
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            last_error: AristonError | None = None
+            for path in paths:
+                try:
+                    return await self._request("GET", path)
+                except AristonError as exc:
+                    last_error = exc
+            return last_error or AristonResponseError(
+                "Comfort ACS menu endpoint unavailable"
+            )
+
     async def async_read_weekly_program(self, plant_id: str) -> dict[str, Any]:
         """Read the existing Cube S schedule. Never issue a programme write."""
         async with self._lock:

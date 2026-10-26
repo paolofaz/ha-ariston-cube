@@ -52,6 +52,8 @@ def test_schema_is_bounded_by_depth_and_list_first_only():
 def test_on_demand_diagnostics_does_not_dump_raw_responses():
     class Client:
         calls = 0
+        async def async_probe_dhw_comfort_menu(self, plant_id):
+            return api.AristonAuthError("Login to web menu unavailable")
         async def async_diagnostic_reports(self, plant_id):
             self.calls += 1
             return {
@@ -178,6 +180,8 @@ def test_consumption_units_are_allowlisted_and_never_expose_costs():
 
 def test_diagnostics_include_only_safe_unit_name_when_present():
     class Client:
+        async def async_probe_dhw_comfort_menu(self, plant_id):
+            return [{"id": "U6_9_2", "value": 2}]
         async def async_diagnostic_reports(self, plant_id):
             return {
                 "weekly_program": {"ChZn1": {"plans": []}},
@@ -197,3 +201,34 @@ def test_diagnostics_include_only_safe_unit_name_when_present():
     assert "999.12" not in repr(result)
     assert "456.0" not in repr(result)
     assert "SECRET_GW" not in repr(result)
+
+
+
+def test_comfort_probe_sanitizes_web_values_and_auth_failure():
+    assert diag.safe_dhw_comfort_menu([{
+        "id": "U6_9_2", "value": 0, "email": "secret@example.invalid",
+    }]) == {"status": "letto", "modalita": "spenta"}
+    assert diag.safe_dhw_comfort_menu([{
+        "id": "U6_9_2", "value": "2", "token": "secret",
+    }]) == {"status": "letto", "modalita": "sempre_attiva"}
+    assert diag.safe_dhw_comfort_menu([{
+        "id": "U6_9_2", "value": 1
+    }]) == {"status": "letto", "modalita": "temporizzata"}
+    assert diag.safe_dhw_comfort_menu(api.AristonAuthError("secret_token")) == {
+        "status": "non_disponibile", "error_type": "AristonAuthError",
+    }
+    assert "secret" not in repr(diag.safe_dhw_comfort_menu({
+        "account": "secret", "items": [{"id": "U6_9_2", "value": 2}]
+    }))
+
+
+def test_comfort_probe_only_gets_menu_data_never_submits_commands():
+    source = (ROOT / "api.py").read_text()
+    method = source.split("async def async_probe_dhw_comfort_menu", 1)[1].split(
+        "async def async_read_weekly_program", 1
+    )[0]
+    assert "/R2/PlantMenu/Refresh?" in method
+    assert "/Menu/User/Refresh/" in method
+    assert 'self._request("GET", path)' in method
+    assert 'self._request("POST"' not in method
+    assert "PlantMenu/Submit" not in method

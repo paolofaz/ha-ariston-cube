@@ -327,3 +327,20 @@ existing timetable.
 
 With Lovelace YAML resource mode, the resource has to be declared explicitly
 as `/ariston_cube/ariston-cube-weekly-card.js?v=0.7.2`.
+
+
+## Version 0.7.3: cautious Comfort ACS discovery
+
+An extra **read-only**, on-demand diagnostic now probes the two documented
+legacy web menu refresh routes for **U6_9_2** (ACS Comfort function).
+The diagnostic adds `comfort_acs_menu_probe` with one of:
+`spenta`, `temporizzata`, `sempre_attiva`, or a sanitized error type.
+It never includes passwords, tokens, cookie values, gateway IDs or raw
+menu responses, and **never submits a Comfort command**. It does not poll
+these endpoints periodically.
+
+A usable Comfort OFF/Sempre attivo switch requires that one of the routes
+supports authenticated readback on this actual boiler. Historical
+`/R2/Account/Login` failures mean working mobile authentication is not
+yet proof of web-menu access. Do not equate mobile `DhwMode` with this
+web-menu parameter. Do not fabricate an optimistic switch.

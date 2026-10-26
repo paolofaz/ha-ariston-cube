@@ -143,6 +143,31 @@ def safe_consumption_units(raw: Any) -> dict[str, str]:
     return {"gas_unit_candidate": GAS_UNIT_CANDIDATES.get(value, "unknown")}
 
 
+
+def safe_dhw_comfort_menu(raw: Any) -> dict[str, str]:
+    """Show only a known 0/1/2 Comfort ACS code, never raw web responses."""
+    if isinstance(raw, AristonError):
+        return {"status": "non_disponibile", "error_type": type(raw).__name__}
+    records = raw if isinstance(raw, list) else raw.get("items") if isinstance(raw, dict) else None
+    if not isinstance(records, list):
+        return {"status": "formato_sconosciuto"}
+    for record in records[:15]:
+        if not isinstance(record, dict) or record.get("id") != "U6_9_2":
+            continue
+        value = record.get("value")
+        # Reject booleans and incidental strings, not coercible arbitrary text.
+        if isinstance(value, bool):
+            break
+        if value in (0, "0"):
+            return {"status": "letto", "modalita": "spenta"}
+        if value in (1, "1"):
+            return {"status": "letto", "modalita": "temporizzata"}
+        if value in (2, "2"):
+            return {"status": "letto", "modalita": "sempre_attiva"}
+        break
+    return {"status": "valore_non_riconosciuto"}
+
+
 async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     """Issue one manual read per endpoint and report only schemas.
 
@@ -151,6 +176,7 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     """
     coordinator = entry.runtime_data
     snapshots = await coordinator.client.async_diagnostic_reports(coordinator.plant_id)
+    comfort_probe = await coordinator.client.async_probe_dhw_comfort_menu(coordinator.plant_id)
     safe_reports = {}
     for key in ("weekly_program", "energy_account", "consumption_sequences",
                 "consumption_settings"):
@@ -162,12 +188,13 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     # Only static entity names; no account or plant data in the output.
     return {
         "integration": "ariston_cube",
-        "version": "0.7.2",
+        "version": "0.7.3",
         "purpose": "schema_only_no_personal_values",
         "reports": safe_reports,
         "consumption_inventory": safe_consumption_inventory(
             snapshots.get("consumption_sequences")
         ),
+        "comfort_acs_menu_probe": safe_dhw_comfort_menu(comfort_probe),
         "consumption_units": safe_consumption_units(
             snapshots.get("consumption_settings")
         ),
