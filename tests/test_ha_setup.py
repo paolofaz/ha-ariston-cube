@@ -37,6 +37,9 @@ def _setup_module(monkeypatch):
     helpers_module.__path__ = []
     clients_module = types.ModuleType("homeassistant.helpers.aiohttp_client")
     clients_module.async_get_clientsession = lambda hass: "shared-test-session"
+    clients_module.async_create_clientsession = (
+        lambda hass, **kwargs: "private-web-test-session"
+    )
 
     package = types.ModuleType("_ariston_cube_setup_test")
     package.__path__ = [str(ROOT)]
@@ -50,8 +53,9 @@ def _setup_module(monkeypatch):
     frontend_module.async_register_weekly_card = register_mock_frontend
 
     class Client:
-        def __init__(self, session, username, password):
+        def __init__(self, session, username, password, *, web_session=None):
             assert session == "shared-test-session"
+            assert web_session == "private-web-test-session"
             assert username == "test-user"
             assert password == "test-password"
 
@@ -154,6 +158,6 @@ def test_release_marker_and_diagnostics_format_are_consistent():
     manifest = json.loads((ROOT / "manifest.json").read_text())
     source = (ROOT / "__init__.py").read_text()
     diag = (ROOT / "diagnostics.py").read_text()
-    assert manifest["version"] == "0.8.0"
-    assert "Ariston Cube 0.8.0 starting" in source
-    assert '"version": "0.8.0"' in diag
+    assert manifest["version"] == "0.8.1"
+    assert "Ariston Cube 0.8.1 starting" in source
+    assert '"version": "0.8.1"' in diag
