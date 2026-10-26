@@ -237,7 +237,7 @@ def test_comfort_probe_uses_separate_web_portal_and_never_submits():
 
 
 def test_web_portal_http_status_is_safely_reported():
-    from _ariston_cube_testpkg.web_portal import WebPortalAuthError
+    from _ariston_cube_diag_test.web_portal import WebPortalAuthError
     error = WebPortalAuthError("Web login form HTTP 403")
     assert diag.safe_dhw_comfort_menu(error) == {
         "status": "non_disponibile",
