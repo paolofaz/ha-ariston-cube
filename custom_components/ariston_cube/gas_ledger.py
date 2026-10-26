@@ -18,7 +18,7 @@ from typing import Any
 
 _SERIES = {"Heating": "heating", "Dhw": "dhw"}
 _PERIODS = ("PreviousDay", "CurrentDay")
-_VERSION = 1
+_VERSION = 2
 
 
 def empty_state() -> dict[str, Any]:
@@ -27,6 +27,9 @@ def empty_state() -> dict[str, Any]:
         "totals": {"heating": 0.0, "dhw": 0.0},
         "days": {},
         "previous_day_verified": False,
+        "tracking_start": None,
+        "closed_through": None,
+        "continuity_lost": False,
     }
 
 
@@ -65,6 +68,16 @@ def valid_state(raw: Any) -> dict[str, Any] | None:
                     return None
     if not isinstance(raw.get("previous_day_verified"), bool):
         return None
+    if not isinstance(raw.get("continuity_lost"), bool):
+        return None
+    for field in ("tracking_start", "closed_through"):
+        val = raw.get(field)
+        if val is not None:
+            try:
+                if not isinstance(val, str) or date.fromisoformat(val).isoformat() != val:
+                    return None
+            except ValueError:
+                return None
     return deepcopy(raw)
 
 
@@ -136,12 +149,40 @@ def apply_report(
         slots[key] = value
         changed = True
     previous = (now.date() - timedelta(days=1)).isoformat()
-    if not state["previous_day_verified"]:
-        # Prove server offers last day's final slot for BOTH usage kinds.
-        prev = state["days"].get(previous, {})
-        if all("11" in prev.get(kind, {}) for kind in _SERIES.values()):
-            state["previous_day_verified"] = True
-            changed = True
+    if state["tracking_start"] is None and state["days"]:
+        state["tracking_start"] = min(state["days"])
+        changed = True
+    prev = state["days"].get(previous, {})
+    # A whole day is closed only if both gas streams include 22:00-00:00.
+    prev_complete = all(
+        len(prev.get(kind, {})) == 12 and "11" in prev.get(kind, {})
+        for kind in _SERIES.values()
+    )
+    if prev_complete and not state["continuity_lost"]:
+        closed = state["closed_through"]
+        if closed is None:
+            if state["tracking_start"] == previous:
+                state["closed_through"] = previous
+                state["previous_day_verified"] = True
+                changed = True
+            elif state["tracking_start"] < previous:
+                state["continuity_lost"] = True
+                changed = True
+        elif closed < previous:
+            if date.fromisoformat(closed) + timedelta(days=1) == date.fromisoformat(previous):
+                state["closed_through"] = previous
+                changed = True
+            else:
+                state["continuity_lost"] = True
+                changed = True
+    elif state["closed_through"] is not None and (
+        date.fromisoformat(state["closed_through"]) + timedelta(days=1)
+        < date.fromisoformat(previous)
+    ):
+        # After a multi-day outage the portal can provide Yesterday but
+        # not days in between. Never resume a knowingly incomplete total.
+        state["continuity_lost"] = True
+        changed = True
     # Keep this day, the previous two days and only their slot ledgers.
     # Lifetime totals remain untouched when old slot hashes are discarded.
     allowed_days = {(now.date() - timedelta(days=i)).isoformat() for i in range(3)}
@@ -174,8 +215,12 @@ class StoredGasLedger:
         if changed:
             await self._store.async_save(candidate)
         self._state = candidate
-        if not candidate["previous_day_verified"]:
-            # No supported previous-day reading: missing 22-24 would undercount.
+        yesterday = (now.date() - timedelta(days=1)).isoformat()
+        if (candidate["continuity_lost"]
+                or not candidate["previous_day_verified"]
+                or candidate["closed_through"] != yesterday):
+            # Missing a closing 22:00-00:00 bucket is a real accounting gap.
+            # Do not silently bridge it or publish an incorrect sum.
             return {"heating": None, "dhw": None, "history_complete": False}
         return {
             "heating": candidate["totals"]["heating"],
