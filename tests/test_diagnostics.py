@@ -222,13 +222,14 @@ def test_comfort_probe_sanitizes_web_values_and_auth_failure():
     }))
 
 
-def test_comfort_probe_only_gets_menu_data_never_submits_commands():
-    source = (ROOT / "api.py").read_text()
-    method = source.split("async def async_probe_dhw_comfort_menu", 1)[1].split(
+def test_comfort_probe_uses_separate_web_portal_and_never_submits():
+    api_source = (ROOT / "api.py").read_text()
+    probe = api_source.split("async def async_probe_dhw_comfort_menu", 1)[1].split(
         "async def async_read_weekly_program", 1
     )[0]
-    assert "/R2/PlantMenu/Refresh?" in method
-    assert "/Menu/User/Refresh/" in method
-    assert 'self._request("GET", path)' in method
-    assert 'self._request("POST"' not in method
-    assert "PlantMenu/Submit" not in method
+    assert "web_portal.async_read_comfort(plant_id)" in probe
+    assert "async_set_comfort" not in probe
+    web_source = (ROOT / "web_portal.py").read_text()
+    assert "/R2/PlantMenu/Refresh?" in web_source
+    assert "/R2/PlantMenu/Submit/" in web_source
+    assert 'self._request("GET", path)' in web_source
