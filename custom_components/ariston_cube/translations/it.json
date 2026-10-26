@@ -87,6 +87,11 @@
       "automatic_thermoregulation": {
         "name": "Termoregolazione automatica"
       }
+    },
+    "calendar": {
+      "weekly_calendar": {
+        "name": "Calendario riscaldamento Cube S"
+      }
     }
   }
 }

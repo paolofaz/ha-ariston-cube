@@ -87,3 +87,38 @@ def test_weekly_schedule_platform_is_read_only_and_infrequent():
     assert "entry.async_create_background_task" in sensor_source
     assert "async_read_weekly_program" in schedule_source
     assert "async_set_" not in (ROOT / "weekly_program.py").read_text()
+
+
+
+def test_calendar_expands_all_three_weekly_plans_with_previous_day_carry():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    program = weekly.parse_weekly_program(sample())
+    tz = ZoneInfo("Europe/Rome")
+    # Mon 2026-10-26: current plan begins 06:00 Comfort, previous day's
+    # last slice is 18:00 Economy. Fill 00:00-06:00 with Sunday Economy.
+    start = datetime(2026, 10, 26, 0, 0, tzinfo=tz)
+    end = datetime(2026, 10, 27, 0, 0, tzinfo=tz)
+    events = weekly.calendar_intervals(program, start, end, tz)
+    assert [(e["start"].strftime("%H:%M"), e["end"].strftime("%H:%M"),
+             e["preset"]) for e in events] == [
+        ("00:00", "06:00", "Economy"),
+        ("06:00", "22:00", "Comfort"),
+        ("22:00", "00:00", "Economy"),
+    ]
+
+
+def test_calendar_never_fills_missing_weekdays_with_guesses():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    parsed = weekly.parse_weekly_program({
+        "ChZn1": {"plans": [{"days": [0], "slices": [
+            {"from": 0, "temp": 1}
+        ]}]}
+    })
+    tz = ZoneInfo("Europe/Rome")
+    events = weekly.calendar_intervals(
+        parsed, datetime(2026, 10, 26, tzinfo=tz),
+        datetime(2026, 10, 27, tzinfo=tz), tz,
+    )
+    assert events == []

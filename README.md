@@ -226,3 +226,13 @@ to the provided maximum are treated as an unconnected-sensor sentinel, as
 in the upstream GALEVO client. Pressure values without an explicit 'bar'
 unit are not represented as bar. These additions are read-only and do not
 alter the existing five sensor IDs. No guessed DHW flame is exposed.
+
+
+## Weekly schedule in Home Assistant Calendar (0.7.0)
+The original Cube S seven-day Comfort/Economy timetable now appears in a
+read-only Home Assistant **calendar** entity, separate from the existing
+schedule sensor and its per-day attributes. It displays real start/end
+intervals using Home Assistant's local timezone. The sensor and calendar
+share exactly one cloud poller (every 3 hours). Neither entity alters the
+weekly plan. Event editing is deliberately unavailable: no verified mobile
+API write endpoint/payload for ChZn1 has been established.

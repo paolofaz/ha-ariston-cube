@@ -35,3 +35,18 @@ class AristonWeeklyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return parse_weekly_program(result)
         except (AristonError, ValueError) as exc:
             raise UpdateFailed("Unable to read Cube S weekly programme") from exc
+
+
+
+def get_or_create_weekly_coordinator(hass, entry) -> AristonWeeklyCoordinator:
+    """Share precisely one schedule poller across sensor and calendar platforms."""
+    main = entry.runtime_data
+    current = getattr(main, "weekly_coordinator", None)
+    if current is not None:
+        return current
+    current = AristonWeeklyCoordinator(hass, main)
+    main.weekly_coordinator = current
+    entry.async_create_background_task(
+        hass, current.async_refresh(), "Ariston Cube weekly programme initial read"
+    )
+    return current

@@ -7,7 +7,7 @@ from homeassistant.const import UnitOfTemperature, UnitOfPressure
 
 from .entity import AristonEntity
 from .model import as_temperature
-from .schedule_coordinator import AristonWeeklyCoordinator
+from .schedule_coordinator import get_or_create_weekly_coordinator
 from .weekly_program import daily_description
 
 DESCRIPTIONS = (
@@ -59,15 +59,10 @@ DESCRIPTIONS = (
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = entry.runtime_data
-    schedule = AristonWeeklyCoordinator(hass, coordinator)
+    schedule = get_or_create_weekly_coordinator(hass, entry)
     entities = [AristonTemperature(coordinator, description) for description in DESCRIPTIONS]
     entities.append(AristonWeeklySchedule(schedule))
     async_add_entities(entities)
-    # Only one additional request at startup; refresh failures remain local
-    # to the optional schedule entity, never breaking existing sensors.
-    entry.async_create_background_task(
-        hass, schedule.async_refresh(), "Ariston Cube weekly programme initial read"
-    )
 
 
 class AristonTemperature(AristonEntity, SensorEntity):

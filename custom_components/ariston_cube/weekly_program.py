@@ -75,3 +75,60 @@ def daily_description(slices: list[dict[str, Any]] | None) -> str | None:
     if slices is None:
         return None
     return " · ".join(f"{slice_['time']} {slice_['preset']}" for slice_ in slices)
+
+
+
+def calendar_intervals(
+    program: dict[str, Any],
+    start_date: Any,
+    end_date: Any,
+    timezone: Any,
+) -> list[dict[str, Any]]:
+    """Expand existing weekly Comfort/Economy periods into calendar intervals.
+
+    Arguments are datetime objects. No weekday is inferred when its programme
+    is absent. Before the first daily change, carry the previous day's last
+    reported preset only when that previous day is known.
+    """
+    from datetime import datetime, time, timedelta
+
+    if not isinstance(program, dict) or not isinstance(program.get("days"), dict):
+        return []
+    if start_date >= end_date:
+        return []
+    local_start = start_date.astimezone(timezone)
+    local_end = end_date.astimezone(timezone)
+    if (local_end - local_start).days > 65:
+        raise ValueError("Calendar interval exceeds 65 days")
+
+    first = local_start.date()
+    last = local_end.date()
+    results = []
+    day = first
+    while day <= last:
+        idx = (day.weekday() + 1) % 7
+        slices = program["days"].get(DAYS_IT[idx])
+        previous = program["days"].get(DAYS_IT[(idx - 1) % 7])
+        if slices is not None:
+            ordered = sorted(slices, key=lambda item: item["minute"])
+            changes = list(ordered)
+            if ordered and ordered[0]["minute"] > 0 and previous:
+                changes.insert(0, {
+                    "minute": 0,
+                    "preset": sorted(previous, key=lambda item: item["minute"])[-1]["preset"],
+                })
+            for n, change in enumerate(changes):
+                end_minute = changes[n + 1]["minute"] if n + 1 < len(changes) else 1440
+                if end_minute <= change["minute"]:
+                    continue
+                base = datetime.combine(day, time.min, timezone)
+                started = base + timedelta(minutes=change["minute"])
+                ended = base + timedelta(minutes=end_minute)
+                if started < local_end and ended > local_start:
+                    results.append({
+                        "start": started,
+                        "end": ended,
+                        "preset": change["preset"],
+                    })
+        day += timedelta(days=1)
+    return results
