@@ -233,3 +233,17 @@ def test_comfort_probe_uses_separate_web_portal_and_never_submits():
     assert "/R2/PlantMenu/Refresh?" in web_source
     assert "/R2/PlantMenu/Submit/" in web_source
     assert 'self._request("GET", path)' in web_source
+
+
+
+def test_web_portal_http_status_is_safely_reported():
+    from _ariston_cube_testpkg.web_portal import WebPortalAuthError
+    error = WebPortalAuthError("Web login form HTTP 403")
+    assert diag.safe_dhw_comfort_menu(error) == {
+        "status": "non_disponibile",
+        "error_type": "WebPortalAuthError",
+        "http_status": 403,
+    }
+    assert diag.safe_dhw_comfort_menu(WebPortalAuthError("secret_payload")) == {
+        "status": "non_disponibile", "error_type": "WebPortalAuthError"
+    }
