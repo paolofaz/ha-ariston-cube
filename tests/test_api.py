@@ -52,7 +52,6 @@ class Session:
 
 def test_authentication_and_read_contract():
     session = Session(
-        Response(path="/R2/Account/Login"),  # preflight
         Response('{"ok":true}', path="/R2/Home"),  # login
         Response([{"gwId": "GW123", "name": "Cube"}]),  # plants
         Response({"zones": [{"num": 1}]}),  # features
@@ -66,10 +65,11 @@ def test_authentication_and_read_contract():
         assert result["items"][0]["value"] == 21
 
     asyncio.run(test())
-    assert session.calls[0][0] == "GET"
-    assert session.calls[1][0] == "POST"
-    assert session.calls[2][2]["headers"]["X-Requested-With"] == "XMLHttpRequest"
-    body = session.calls[4][2]["json"]
+    assert session.calls[0][0] == "POST"
+    assert "/R2/Account/Login" in session.calls[0][1]
+    assert session.calls[1][0] == "GET"
+    assert session.calls[0][2].get("headers") is None
+    body = session.calls[3][2]["json"]
     assert body["useCache"] is False
     assert {"id": "ZoneMeasuredTemp", "zn": 1} in body["items"]
     assert not any("/temperatures" in url for _, url, _ in session.calls)
@@ -80,7 +80,6 @@ def test_expired_session_reauthenticates_only_once():
         Response(path="/R2/Account/Login"),  # preflight
         Response('{"ok":true}', path="/R2/Home"),  # login
         Response(status=401),  # features -> unauthorized
-        Response(path="/R2/Account/Login"),  # preflight again
         Response('{"ok":true}', path="/R2/Home"),  # login again
         Response({"zones": [{"num": 1}]}),
         Response({"items": []}),
@@ -96,10 +95,8 @@ def test_expired_session_reauthenticates_only_once():
 
 def test_expired_session_login_redirect_raises_auth_error():
     session = Session(
-        Response(path="/R2/Account/Login"),
         Response('{"ok":true}', path="/R2/Home"),
         Response(payload=None, path="/R2/Account/Login"),
-        Response(path="/R2/Account/Login"),
         Response('{"ok":true}', path="/R2/Home"),
         Response(payload=None, path="/R2/Account/Login"),
     )
@@ -117,7 +114,6 @@ def test_expired_session_login_redirect_raises_auth_error():
 
 def test_denied_login_is_not_accepted():
     session = Session(
-        Response(path="/R2/Account/Login"),
         Response('{"ok":false}', path="/R2/Account/Login"),
     )
     async def test():
@@ -130,14 +126,40 @@ def test_denied_login_is_not_accepted():
     asyncio.run(test())
 
 
-def test_preflight_403_is_not_mislabeled_bad_password():
+def test_login_http_403_is_explicit_auth_error():
     session = Session(Response(status=403, path="/R2/Account/Login"))
     async def test():
         client = api.AristonClient(session, "user", "secret")
         try:
             await client.async_login()
-        except api.AristonConnectionError as exc:
-            assert "login_page" in str(exc)
+        except api.AristonAuthError as exc:
+            assert "HTTP 403 at login_submit" in str(exc)
             return
-        assert False, "Expected cloud connection error"
+        assert False, "Expected authentication rejection"
+    asyncio.run(test())
+
+
+def test_login_http_404_is_api_contract_error():
+    session = Session(Response(status=404, path="/R2/Account/Login"))
+    async def test():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_login()
+        except api.AristonResponseError as exc:
+            assert "HTTP 404 at login_submit" in str(exc)
+            return
+        assert False, "Expected unexpected API response"
+    asyncio.run(test())
+
+
+def test_cloud_http_503_is_connection_error():
+    session = Session(Response(status=503, path="/R2/Account/Login"))
+    async def test():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_login()
+        except api.AristonConnectionError as exc:
+            assert "HTTP 503 at login_submit" in str(exc)
+            return
+        assert False, "Expected service unavailable"
     asyncio.run(test())

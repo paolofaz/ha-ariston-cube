@@ -1,16 +1,15 @@
-"""Minimal async client for the legacy Ariston NET cloud API.
+"""Read-only async client for the legacy Ariston NET cloud API.
 
-Read-only: there are no endpoints for changing boiler settings here.
+The login sequence intentionally matches the historical requests.Session
+client: POST credentials, then GET the discovered gateways. No speculative
+preflight GET, CSRF cookie manipulation or nonstandard request headers.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from html.parser import HTMLParser
 from typing import Any
-
-from yarl import URL
 
 import aiohttp
 
@@ -35,24 +34,10 @@ class AristonResponseError(AristonError):
 
 
 
-class _LoginTokenParser(HTMLParser):
-    """Parse an optional verification token from the public login form."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.token: str | None = None
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() == "input":
-            attributes = dict(attrs)
-            if attributes.get("name") == "__RequestVerificationToken":
-                self.token = attributes.get("value")
-
-
 def _phase(method: str, path: str) -> str:
     """Never expose gateway IDs or credentials in diagnostics."""
     if path.startswith("/R2/Account/Login"):
-        return "login_page" if method == "GET" else "login_submit"
+        return "login_submit"
     if "/plants/lite" in path:
         return "plant_discovery"
     if "/features?" in path:
@@ -79,29 +64,21 @@ class AristonClient:
         expect_json: bool = True,
     ) -> Any:
         phase = _phase(method, path)
-        headers = (
-            {"Accept": "text/html,application/xhtml+xml"}
-            if phase == "login_page"
-            else {
-                "Accept": "application/json, text/javascript, */*; q=0.01",
-                "X-Requested-With": "XMLHttpRequest",
-                "Ajax-Request": "json",
-            }
-        )
         try:
             async with self._session.request(
-                method, BASE_URL + path, json=json_body, headers=headers,
+                method, BASE_URL + path, json=json_body,
                 timeout=aiohttp.ClientTimeout(total=25), allow_redirects=True,
             ) as response:
                 if response.status in (401, 403):
-                    message = f"Ariston HTTP {response.status} at {phase}"
-                    if phase == "login_page":
-                        raise AristonConnectionError(message)
-                    raise AristonAuthError(message)
-                if response.status == 429:
-                    raise AristonConnectionError(f"Ariston rate limited at {phase}")
-                if response.status >= 400:
+                    raise AristonAuthError(
+                        f"Ariston HTTP {response.status} at {phase}"
+                    )
+                if response.status in (408, 425, 429) or response.status >= 500:
                     raise AristonConnectionError(
+                        f"Ariston HTTP {response.status} at {phase}"
+                    )
+                if response.status >= 400:
+                    raise AristonResponseError(
                         f"Ariston HTTP {response.status} at {phase}"
                     )
                 if expect_json and "/account/login" in response.url.path.lower():
@@ -116,22 +93,11 @@ class AristonClient:
                 return {"path": response.url.path, "body": await response.text()}
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise AristonConnectionError(
-                f"Ariston network request failed at {phase}"
+                f"Ariston {type(exc).__name__} at {phase}"
             ) from exc
 
     async def async_login(self) -> None:
-        """GET the login form before posting, supporting optional CSRF cookies."""
-        login_page = await self._request(
-            "GET", "/R2/Account/Login", expect_json=False
-        )
-        parser = _LoginTokenParser()
-        parser.feed(login_page["body"])
-        if parser.token:
-            self._session.cookie_jar.update_cookies(
-                {"__formRequestVerificationToken": parser.token},
-                response_url=URL(BASE_URL),
-            )
-
+        """POST login exactly as in the historically working cloud client."""
         reply = await self._request(
             "POST", "/R2/Account/Login?returnUrl=%2FR2%2FHome",
             json_body={
