@@ -460,3 +460,48 @@ The existing Smc sensor unique IDs stay unchanged; this release still does
 
 Editing Cube S timeProgs ChZn1 is separate unfinished work requiring
 a verified cloud schedule-write contract and safe readback.
+
+## 0.8.5 — experimental persistent, Energy-compatible gas statistics
+
+Web ACS Comfort now polls every **15 minutes**, a compromise between
+cloud load and external changes; user actions perform immediate verified
+readback. Mobile and web login remain separate because the mobile v2
+bearer token and R2 cookie/anti-CSRF login are different protocols.
+
+### New two gas totals (different from raw Smc period reports)
+
+- Gas riscaldamento cumulativo (Smc)
+- Gas ACS cumulativo (Smc)
+
+The raw period-report sensors retain their Smc units, names and IDs.
+The two NEW totals are expressed as **m³ at standard conditions**: each
+cloud Smc corresponds numerically to exactly one standard cubic metre.
+This is volume, not a kWh conversion. Home Assistant requires its canonical
+m³ unit to accept device_class GAS statistics. An attribute explicitly
+records that these are standard, not uncorrected line-volume cubic metres.
+
+The totals have state_class TOTAL (without last_reset), because the
+server can correct historical bucket readings up or down. The Recorder
+then records the difference instead of interpreting a correction as a reset.
+
+A private HA Store holds cumulative values and the exact date/2h-slot
+amounts for the past three days. We persist the updated checkpoint
+before publishing sensor states, so restarts do not replay a bucket.
+
+**Fail-closed limitation:** CurrentDay does not provide the previous day's
+22:00-00:00 interval after the reset. The integration will not publish
+an incomplete lifetime total unless the web histogram also exposes a
+verifiable PreviousDay series containing the final bucket for both
+heating and ACS. This capability is UNVERIFIED on the live account.
+When missing, the two new cumulative sensors are unavailable while
+the four tested raw Smc sensors remain fully functional.
+Safe period names CurrentDay/PreviousDay are exposed for diagnostics.
+A multi-day unfilled gap permanently suspends publication.
+
+**Historical Home Assistant statistics are not migrated.** They remain
+in Recorder under their prior statistic IDs and units. Before any migration
+we need the exact IDs, compatible units and a backup. No automatic
+database rewrite or unsafe ID reassignment is done.
+
+No merge to main or release candidate while this accounting path remains
+untested on the boiler. Cube S timetable writes also remain unverified.

@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _CARD_FILE = Path(__file__).parent / "www" / "ariston-cube-weekly-card.js"
 _CARD_PATH = "/ariston_cube/ariston-cube-weekly-card.js"
-_CARD_RESOURCE = _CARD_PATH + "?v=0.8.4"
+_CARD_RESOURCE = _CARD_PATH + "?v=0.8.5"
 _FLAG = "ariston_cube_frontend_registered"
 
 
