@@ -24,6 +24,7 @@ def _setup_module(monkeypatch):
         BINARY_SENSOR = "binary_sensor"
         CLIMATE = "climate"
         WATER_HEATER = "water_heater"
+        NUMBER = "number"
 
     hass_module = types.ModuleType("homeassistant")
     hass_module.__path__ = []
