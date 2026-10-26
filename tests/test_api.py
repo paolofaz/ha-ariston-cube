@@ -91,7 +91,7 @@ def test_expired_session_reauthenticates_only_once():
         assert await client.async_read_main("GW123") == {"items": []}
 
     asyncio.run(test())
-    assert sum("/Account/Login" in url for _, url, _ in session.calls) == 2
+    assert sum(method == "POST" and "/Account/Login" in url for method, url, _ in session.calls) == 2
 
 
 def test_expired_session_login_redirect_raises_auth_error():
