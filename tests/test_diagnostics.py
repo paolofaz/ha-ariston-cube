@@ -105,3 +105,49 @@ def test_unmapped_shapes_have_four_field_upper_bound():
     assert len(result["unnamed_field_shapes"]) == 4
     assert "sensitive_field" not in repr(result)
     assert "secret" not in repr(result)
+
+
+
+def test_schedule_field_shapes_without_program_values():
+    sample = {
+        "ChZn1": {
+            "plans": [{
+                "days": [0, 1],
+                "slices": [{"from": 480, "temp": 0}, {"from": 1040, "temp": 1}],
+            }]
+        }
+    }
+    result = diag.safe_shape(sample)
+    shown = repr(result)
+    for field in ("'ChZn1'", "'plans'", "'slices'", "'days'", "'temp'"):
+        assert field in shown
+    assert "1040" not in shown
+    assert "480" not in shown
+
+
+def test_known_consumption_codes_show_provisional_names_not_measurements():
+    rows = [
+        {"p": 3, "k": 7, "v": [1234.5, 987.0]},
+        {"p": 1, "k": 10, "v": [0.0]},
+        {"p": 999999, "k": 888888, "v": [1000000.0, 7.5]},
+    ]
+    result = diag.safe_consumption_inventory(rows)
+    assert result["series_count"] == 3
+    assert result["series"][0] == {
+        "period_candidate": "last_month_candidate",
+        "usage_candidate": "heating_gas_candidate",
+        "sample_count": 2,
+        "all_samples_numeric": True,
+    }
+    assert result["series"][1]["usage_candidate"] == "dhw_gas_candidate"
+    assert result["series"][2]["usage_candidate"] == "unknown"
+    for value in ("1234.5", "987.0", "1000000.0", "999999", "888888"):
+        assert value not in repr(result)
+
+
+def test_consumption_metadata_is_fail_closed():
+    assert diag.safe_consumption_inventory({}) == {"kind": "not_a_list"}
+    row = diag.safe_consumption_inventory([{"p": True, "k": "20", "v": [None]}])
+    assert row["series"][0]["period_candidate"] == "unknown"
+    assert row["series"][0]["usage_candidate"] == "unknown"
+    assert not row["series"][0]["all_samples_numeric"]

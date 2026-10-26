@@ -25,13 +25,14 @@ _ALLOWED_FIELDS = frozenset({
     "year", "month", "months", "LastMonth", "LastDay",
     "Today", "ThisMonth", "ThisYear", "Ch", "Dhw",
     "gas", "elect", "electricity", "heat", "heating", "cool",
+    "ChZn1", "plans", "slices", "temp", "p", "k", "v",
     "electric", "cost", "energy", "total", "totals", "isActive",
 })
 
 
 def safe_shape(value: Any, depth: int = 0) -> dict[str, Any]:
     """Return only data types and aggregate structure (never scalar values)."""
-    if depth >= 5:
+    if depth >= 8:
         return {"kind": "max_depth"}
     if isinstance(value, dict):
         fields = {
@@ -72,6 +73,57 @@ def safe_shape(value: Any, depth: int = 0) -> dict[str, Any]:
     return {"kind": "other"}
 
 
+# Code names are from the community Ariston mobile API implementation.
+# Their physical meaning and unit must still be verified on this boiler.
+_PERIOD_CANDIDATES = {
+    1: "last_day_candidate",
+    2: "last_week_candidate",
+    3: "last_month_candidate",
+    4: "last_year_candidate",
+}
+_TYPE_CANDIDATES = {
+    1: "heating_total_energy_candidate",
+    2: "dhw_total_energy_candidate",
+    3: "cooling_total_energy_candidate",
+    7: "heating_gas_candidate",
+    8: "dhw_heat_pump_electricity_candidate",
+    9: "dhw_resistor_electricity_candidate",
+    10: "dhw_gas_candidate",
+    20: "heating_electricity_candidate",
+    21: "dhw_electricity_candidate",
+}
+
+
+def safe_consumption_inventory(raw: Any) -> dict[str, Any]:
+    """Summarize series categories and sample counts, not measurements."""
+    if not isinstance(raw, list):
+        return {"kind": "not_a_list"}
+    series = []
+    for item in raw[:48]:
+        if not isinstance(item, dict):
+            series.append({"kind": "not_an_object"})
+            continue
+        period = item.get("p")
+        kind = item.get("k")
+        values = item.get("v")
+        if not isinstance(period, int) or isinstance(period, bool):
+            period = None
+        if not isinstance(kind, int) or isinstance(kind, bool):
+            kind = None
+        series.append({
+            "period_candidate": _PERIOD_CANDIDATES.get(period, "unknown"),
+            "usage_candidate": _TYPE_CANDIDATES.get(kind, "unknown"),
+            "sample_count": len(values) if isinstance(values, list) else None,
+            "all_samples_numeric": (
+                all(
+                    isinstance(value, (int, float)) and not isinstance(value, bool)
+                    for value in values
+                ) if isinstance(values, list) else False
+            ),
+        })
+    return {"series_count": len(raw), "series": series}
+
+
 async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     """Issue one manual read per endpoint and report only schemas.
 
@@ -90,7 +142,10 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     # Only static entity names; no account or plant data in the output.
     return {
         "integration": "ariston_cube",
-        "version": "0.5.0",
+        "version": "0.5.1",
         "purpose": "schema_only_no_personal_values",
         "reports": safe_reports,
+        "consumption_inventory": safe_consumption_inventory(
+            snapshots.get("consumption_sequences")
+        ),
     }

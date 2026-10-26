@@ -147,3 +147,20 @@ structure**—not the names or their contents—while leaving known safe field
 names intact. This helps inspect these endpoints without exposing the gateway
 ID, token, timestamps or actual gas readings. Do not create cumulative
 statistic sensors from `LastMonth` values.
+
+
+## Diagnostics refinement in 0.5.1
+
+The real 0.5.0 report confirmed 24 consumption-series records with 24 values
+each, but obscured the p/k classification codes. 0.5.1 reports a
+**provisional** category label for each series using the community API's
+consumption-type and reporting-period enumerations, plus sample counts;
+measurements and account data are never copied to diagnostics.
+
+For the weekly programme, the schema allowlist now recognizes ChZn1, plans,
+days, slices, from and temp and displays their shapes more deeply, but not
+any of the scheduled times or temperature readings.
+
+This is still insufficient to calculate lifetime energy statistics; time
+alignment, metering units, rollover and possible cloud corrections remain to
+be validated. The original Recorder history is never modified.
