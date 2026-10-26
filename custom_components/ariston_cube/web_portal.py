@@ -56,10 +56,14 @@ class AristonWebPortal:
             async with self._session.get(
                 BASE_URL + "/R2/Account/Login",
                 timeout=aiohttp.ClientTimeout(total=25),
-                allow_redirects=False,
+                allow_redirects=True,
+                max_redirects=5,
             ) as response:
                 if response.status != 200:
-                    raise WebPortalAuthError("Web login form unavailable")
+                    raise WebPortalAuthError(f"Web login form HTTP {response.status}")
+                final_url = getattr(response, "url", URL(BASE_URL))
+                if final_url.host != URL(BASE_URL).host or final_url.scheme != "https":
+                    raise WebPortalAuthError("Web login form cross-host redirect")
                 form = await response.text()
             match = _TOKEN_RE.search(form)
             if not match:
@@ -82,7 +86,7 @@ class AristonWebPortal:
                 allow_redirects=False,
             ) as response:
                 if response.status != 200:
-                    raise WebPortalAuthError("Web login POST unavailable")
+                    raise WebPortalAuthError(f"Web login POST HTTP {response.status}")
                 try:
                     data = await response.json(content_type=None)
                 except (ValueError, json.JSONDecodeError, aiohttp.ContentTypeError):
