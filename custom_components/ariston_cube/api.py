@@ -1,7 +1,7 @@
-"""Minimal read-only client for the Ariston NET mobile cloud API.
+"""Async Ariston mobile API client with manually triggered temperature controls.
 
-Uses /api/v2/accounts/login and ar.authToken, not the old /R2 web login.
-Device-setting endpoints are deliberately absent.
+Uses /api/v2/accounts/login and ar.authToken. Writes are explicit, validated,
+single-shot operations with read-before-write and readback; no retry on POST.
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ from typing import Any
 import aiohttp
 
 from .const import BASE_URL
-from .model import make_main_request, parse_plants
+from .model import make_main_request, parse_main_data, as_temperature, parse_plants
+from .commands import CommandRejected, build_setpoint_request
 
 MOBILE_USER_AGENT = "RestSharp/106.11.7.0"
 
@@ -43,12 +44,12 @@ def _phase(path: str) -> str:
     if "/features?" in path:
         return "features"
     if "/dataItems/" in path:
-        return "data_read"
+        return "data_write" if "/set?" in path else "data_read"
     return "cloud_request"
 
 
 class AristonClient:
-    """Async read-only client with per-account token and feature cache."""
+    """Async cloud client with serialized reads and bounded explicit writes."""
 
     def __init__(self, session: aiohttp.ClientSession, username: str, password: str) -> None:
         self._session = session
@@ -146,3 +147,44 @@ class AristonClient:
                         raise
                     await self.async_login()
             raise AristonAuthError("Token refresh failed")
+
+    async def async_set_setpoint(
+        self, plant_id: str, item_id: str, value: float,
+    ) -> dict[str, dict[str, Any]]:
+        """Single validated write from a fresh reading, followed by verification.
+
+        Unlike ordinary reads, never retry the write POST: a timeout may mean
+        the boiler applied it despite the response being lost.
+        """
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            features = await self._load_features(plant_id)
+            read_path = f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si"
+            fresh_payload = await self._request(
+                "POST", read_path, json_body=make_main_request(features),
+            )
+            fresh = parse_main_data(fresh_payload)
+            request = build_setpoint_request(fresh, features, item_id, value)
+            if request is None:
+                return fresh  # unchanged: no POST to the write endpoint
+
+            response = await self._request(
+                "POST", f"/api/v2/remote/dataItems/{plant_id}/set?umsys=si",
+                json_body=request,
+            )
+            if isinstance(response, dict) and (
+                response.get("success") is False or response.get("ok") is False
+            ):
+                raise AristonResponseError("Ariston rejected the data write")
+            # Readback is a separate read request; it does not resend the command.
+            after_payload = await self._request(
+                "POST", read_path, json_body=make_main_request(features),
+            )
+            after = parse_main_data(after_payload)
+            actual = as_temperature(after.get(item_id))
+            if actual is None or abs(actual - float(value)) > 0.01:
+                raise AristonResponseError(
+                    "Command submitted but not yet confirmed by cloud; do not repeat immediately"
+                )
+            return after

@@ -1,15 +1,14 @@
-"""Read-only representation of the Cube S thermostat.
+"""Cube S climate with manual setpoint control and cloud verification.
 
-No commands are implemented until the device's program/override semantics
-have been validated with real, sanitized responses.
+Heating mode changes remain disabled until the program override is confirmed.
 """
 
 from __future__ import annotations
 
 import logging
 
-from homeassistant.components.climate import ClimateEntity, HVACAction, HVACMode
-from homeassistant.const import UnitOfTemperature
+from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature, HVACAction, HVACMode
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.exceptions import HomeAssistantError
 
 from .entity import AristonEntity
@@ -32,7 +31,7 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
     _attr_name = "Cube S"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
-    _attr_supported_features = 0
+    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
     _attr_target_temperature_step = 0.5
     _attr_min_temp = 10
     _attr_max_temp = 30
@@ -88,7 +87,13 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
         )
 
     async def async_set_temperature(self, **kwargs) -> None:
-        raise HomeAssistantError("Ariston Cube is read-only in this test build")
+        if ATTR_TEMPERATURE not in kwargs:
+            raise HomeAssistantError("A target temperature is required")
+        # The official Ariston GALEVO client changes ZoneComfortTemp, not
+        # ZoneDesiredTemp. Require heating/manual mode to preserve schedules.
+        await self.coordinator.async_set_setpoint(
+            "ZoneComfortTemp", kwargs[ATTR_TEMPERATURE]
+        )
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         raise HomeAssistantError("Ariston Cube cannot change heating mode yet")

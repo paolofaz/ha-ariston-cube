@@ -2,12 +2,13 @@
 
 A new, minimal custom integration for the **Ariston CLAS ONE 30L + Cube S** via the legacy Ariston NET cloud API.
 
-> **Development status: experimental / read-only prototype.**
+> **Development status: experimental / first writable build (0.3.0).**
 > Login and the original five read-only sensors were successfully tested on a
 > real CLAS ONE/Cube S on 26 October 2026. The additional climate and water
 > heater entities have **not yet** been validated on the live boiler. Do not
 > replace the existing Ariston integration or remove its Recorder history.
-> No boiler control is implemented in this branch.
+> The only write services enabled are manual heating comfort temperature and
+> ACS setpoint. **Those writes have not been verified on a real boiler yet.**
 
 ## Milestone 1 and 2 status
 
@@ -147,3 +148,27 @@ running. The absence of a platform or entity line distinguishes a platform
 loading failure from entity registration trouble. Check the
 `/config/custom_components/ariston_cube/manifest.json` version is 0.2.2.
 The five previous sensors remain unchanged.
+
+## Milestone 3: write test for temperature setpoints
+
+**This experimental build enables user-triggered setpoint changes.** The
+`climate` entity exposes `TARGET_TEMPERATURE` and sends updates to
+`ZoneComfortTemp` for heating zone 1 **only when both the plant and the Cube
+S are in manual heating mode**. It deliberately does not force a mode change
+or change the time programme. If the Cube S is running its weekly programme,
+Home Assistant returns an explanatory error instead of altering the schedule.
+
+The `water_heater` entity exposes `TARGET_TEMPERATURE` and updates only
+`DhwTemp`. DHW mode controls remain disabled.
+
+Before any write, the client reads the current cloud snapshot and validates
+the device-supplied min/max, step, and previous value. It sends a single
+`dataItems/set` request with the documented `prevValue`, `zone` and
+`features` fields, then performs one fresh read. It **never retries** a
+write automatically. If cloud confirmation is delayed, the UI reports that
+the write was submitted but not confirmed, and recommends not repeating it.
+
+For the first on-device test, change ACS by only 1°C within permitted values
+and check the Cube S/Ariston NET app shows the same result. The old integration
+may see temporary gateway HTTP 500 errors during simultaneous polling. Avoid
+continuous stress testing, and leave the old entity history intact.

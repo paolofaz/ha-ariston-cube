@@ -1,7 +1,6 @@
-"""Pure validation of possible Ariston thermostat/DHW commands.
+"""Safety validation for explicit thermostat/DHW setpoint changes.
 
-NOT wired to the API or to Home Assistant service calls. This module is
-an audited staging area for future opt-in writes, not a control mechanism.
+No automatic changes, and no schedule/plant/DHW mode writes.
 """
 
 from __future__ import annotations
@@ -92,7 +91,7 @@ def build_setpoint_request(
 
     # A manual target is not meaningful while Cube S follows its own weekly
     # program; schedule overrides need separate, explicitly verified logic.
-    if item_id == "ZoneDesiredTemp":
+    if item_id in ("ZoneDesiredTemp", "ZoneComfortTemp"):
         if enum_code(snapshot.get("ZoneMode")) != 2:
             raise CommandRejected("Manual heating mode is required")
         if enum_code(snapshot.get("PlantMode")) not in (1, 2):

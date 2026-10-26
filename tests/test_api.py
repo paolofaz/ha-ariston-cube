@@ -153,3 +153,109 @@ def test_explicit_rejected_login():
             return
         assert False, "Expected rejected login"
     run(scenario())
+
+
+
+def _readback_items(comfort=21.5, dhw=50):
+    return {"items": [
+        {"id": "PlantMode", "zone": 0, "value": 1},
+        {"id": "ZoneMode", "zone": 1, "value": 2},
+        {"id": "ZoneComfortTemp", "zone": 1, "value": comfort,
+         "min": 10, "max": 30, "step": 0.5},
+        {"id": "DhwTemp", "zone": 0, "value": dhw,
+         "min": 35, "max": 65, "step": 1},
+    ]}
+
+
+def test_live_setpoint_single_post_and_readback():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_readback_items(comfort=21, dhw=49)),
+        Response(None),  # successful empty-body write response
+        Response(_readback_items(comfort=21.5, dhw=49)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_set_setpoint("GW123", "ZoneComfortTemp", 21.5)
+        assert result["ZoneComfortTemp"]["value"] == 21.5
+    run(scenario())
+    writes = [(url, opts["json"]) for method, url, opts in session.calls
+              if "/dataItems/" in url and "/set?" in url]
+    assert len(writes) == 1
+    assert writes[0][1]["items"][0] == {
+        "id": "ZoneComfortTemp", "zone": 1, "prevValue": 21.0, "value": 21.5
+    }
+
+
+def test_write_rejected_in_program_mode_before_any_set_post():
+    readings = _readback_items()
+    for item in readings["items"]:
+        if item["id"] == "ZoneMode":
+            item["value"] = 3
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(readings),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_set_setpoint("GW123", "ZoneComfortTemp", 22)
+        except api.CommandRejected:
+            return
+        assert False, "Expected no write in time-program mode"
+    run(scenario())
+    assert not any("/set?" in url for _, url, _ in session.calls)
+
+
+def test_no_duplicate_post_when_unchanged():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_readback_items(comfort=21.5, dhw=49)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_set_setpoint("GW123", "DhwTemp", 49)
+        assert result["DhwTemp"]["value"] == 49
+    run(scenario())
+    assert not any("/set?" in url for _, url, _ in session.calls)
+
+
+def test_write_not_retried_after_timeout_http_error():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_readback_items(comfort=21.5, dhw=49)),
+        Response(status=503),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_set_setpoint("GW123", "DhwTemp", 50)
+        except api.AristonConnectionError:
+            return
+        assert False, "Expected write service error"
+    run(scenario())
+    assert sum("/set?" in url for _, url, _ in session.calls) == 1
+
+
+def test_write_accepted_but_readback_mismatch_is_not_retried():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_readback_items(comfort=21.5, dhw=49)),
+        Response(None),
+        Response(_readback_items(comfort=21.5, dhw=49)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_set_setpoint("GW123", "DhwTemp", 50)
+        except api.AristonResponseError as exc:
+            assert "not yet confirmed" in str(exc)
+            return
+        assert False, "Expected non-confirmation warning"
+    run(scenario())
+    assert sum("/set?" in url for _, url, _ in session.calls) == 1

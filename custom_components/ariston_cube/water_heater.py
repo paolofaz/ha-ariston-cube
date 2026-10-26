@@ -1,11 +1,11 @@
-"""Read-only domestic hot water state from the Ariston cloud."""
+"""DHW state with manually triggered ACS setpoint changes."""
 
 from __future__ import annotations
 
 import logging
 
-from homeassistant.components.water_heater import WaterHeaterEntity
-from homeassistant.const import UnitOfTemperature
+from homeassistant.components.water_heater import WaterHeaterEntity, WaterHeaterEntityFeature
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.exceptions import HomeAssistantError
 
 from .entity import AristonEntity
@@ -27,7 +27,7 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
 
     _attr_name = "Acqua calda sanitaria"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_supported_features = 0
+    _attr_supported_features = WaterHeaterEntityFeature.TARGET_TEMPERATURE
     _attr_min_temp = 35
     _attr_max_temp = 65
     _attr_target_temperature_step = 1
@@ -77,7 +77,11 @@ class AristonDomesticHotWater(AristonEntity, WaterHeaterEntity):
         return super().available and self.target_temperature is not None
 
     async def async_set_temperature(self, **kwargs) -> None:
-        raise HomeAssistantError("Ariston Cube is read-only in this test build")
+        if ATTR_TEMPERATURE not in kwargs:
+            raise HomeAssistantError("A target temperature is required")
+        await self.coordinator.async_set_setpoint(
+            "DhwTemp", kwargs[ATTR_TEMPERATURE]
+        )
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         raise HomeAssistantError("Ariston Cube cannot change DHW mode yet")

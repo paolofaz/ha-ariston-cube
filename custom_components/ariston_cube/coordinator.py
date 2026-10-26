@@ -6,10 +6,11 @@ from datetime import timedelta
 import logging
 from typing import Any
 
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import AristonAuthError, AristonClient, AristonError
+from .commands import CommandRejected
 from .const import CONF_PLANT_ID, DOMAIN, SCAN_INTERVAL_SECONDS
 from .model import parse_main_data
 
@@ -36,3 +37,16 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             raise ConfigEntryAuthFailed("Ariston authentication failed") from exc
         except (AristonError, ValueError) as exc:
             raise UpdateFailed("Unable to refresh Ariston data") from exc
+
+    async def async_set_setpoint(self, item_id: str, value: float) -> None:
+        """Run one user-initiated write and publish only verified readback."""
+        try:
+            after = await self.client.async_set_setpoint(
+                self.plant_id, item_id, value
+            )
+        except CommandRejected as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        except AristonError as exc:
+            _LOGGER.warning("Ariston setpoint not confirmed: %s", exc)
+            raise HomeAssistantError(str(exc)) from exc
+        self.async_set_updated_data(after)

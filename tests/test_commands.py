@@ -1,4 +1,4 @@
-"""Unit-test unconnected future command construction without cloud calls."""
+"""Unit-test bounded setpoint command construction without cloud calls."""
 
 import importlib
 from pathlib import Path
@@ -78,3 +78,14 @@ def test_reject_non_whitelisted_properties():
 def test_feature_snapshot_required():
     with pytest.raises(commands.CommandRejected):
         commands.build_setpoint_request(snapshot(), {}, "DhwTemp", 50)
+
+
+
+def test_comfort_setpoint_write_requires_manual_zone_and_heat_plant():
+    body = commands.build_setpoint_request(snapshot(), FEATURES, "ZoneComfortTemp", 21.5)
+    assert body["items"][0] == {
+        "id": "ZoneComfortTemp", "zone": 1, "prevValue": 21.0, "value": 21.5
+    }
+    for state in (snapshot(ZoneMode={"value": 3}), snapshot(PlantMode={"value": 0})):
+        with pytest.raises(commands.CommandRejected, match="mode"):
+            commands.build_setpoint_request(state, FEATURES, "ZoneComfortTemp", 21.5)
