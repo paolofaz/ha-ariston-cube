@@ -1,6 +1,6 @@
-"""Regression tests for persisted cloud Smc accounting and daylight boundaries."""
+"""Regression tests for the real 00:00/02:00 Ariston Smc publication cycle."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import importlib
 import sys
@@ -15,20 +15,22 @@ if PKG not in sys.modules:
     sys.modules[PKG] = pkg
 gas = importlib.import_module(PKG + ".gas_ledger")
 ROME = ZoneInfo("Europe/Rome")
-MON = datetime(2026, 10, 26, 16, 25, tzinfo=ROME)
-TUE = datetime(2026, 10, 27, 2, 25, tzinfo=ROME)
-WED = datetime(2026, 10, 28, 2, 25, tzinfo=ROME)
+MON_08 = datetime(2026, 10, 26, 8, 25, tzinfo=ROME)
+MON_16 = MON_08.replace(hour=16)
+TUE_00 = datetime(2026, 10, 27, 0, 20, tzinfo=ROME)
+TUE_02 = TUE_00.replace(hour=2)
+WED_02 = TUE_02.replace(day=28)
 
 
-def report(heating, dhw, *, yesterday=None):
+def report(heat, dhw, *, previous=None):
     rows = [
         {"period": "CurrentDay", "series": "Heating",
-         "items": [{"x": str(i), "y": x} for i, x in enumerate(heating)]},
+         "items": [{"x": str(i), "y": x} for i, x in enumerate(heat)]},
         {"period": "CurrentDay", "series": "Dhw",
          "items": [{"x": str(i), "y": x} for i, x in enumerate(dhw)]},
     ]
-    if yesterday is not None:
-        for series, values in zip(("Heating", "Dhw"), yesterday):
+    if previous is not None:
+        for series, values in zip(("Heating", "Dhw"), previous):
             rows.append({
                 "period": "PreviousDay", "series": series,
                 "items": [{"x": str(i), "y": x} for i, x in enumerate(values)],
@@ -36,115 +38,146 @@ def report(heating, dhw, *, yesterday=None):
     return {"asPhysicalUnit": {"histogramData": rows}}
 
 
-def test_ledger_first_day_not_ready_until_full_yesterday_is_observed():
-    s = gas.empty_state()
-    s, changed = gas.apply_report(s, report([0.5] * 12, [0.1] * 12), MON)
+def test_two_equal_adjacent_fasce_add_separately_but_rereads_do_not():
+    # 04-06 = 0.1 and 06-08 = 0.1, two separate keys in the same day.
+    samples = [0.0, 0.0, 0.1, 0.1] + [0.0] * 8
+    source = report(samples, [0.0] * 12)
+    state, changed = gas.apply_report(gas.empty_state(), source, MON_08)
     assert changed
-    assert s["totals"]["heating"] == 4.0
-    assert s["closed_through"] is None
-    # Next day: all twelve slots of yesterday, including 22:00-00:00.
-    s, changed = gas.apply_report(
-        s, report([0.25] * 12, [0.05] * 12,
-                  yesterday=([0.5] * 12, [0.1] * 12)), TUE,
+    assert state["totals"]["heating"] == 0.2
+    slots = state["days"]["2026-10-26"]["heating"]
+    assert slots["2"] == 0.1  # 04-06
+    assert slots["3"] == 0.1  # 06-08
+    repeated, changed = gas.apply_report(state, source, MON_08)
+    assert changed is False
+    assert repeated["totals"]["heating"] == 0.2
+    assert gas.valid_state(repeated) == state  # survives persistent replay
+
+
+def test_22_to_00_is_assigned_to_yesterday_then_new_day_starts_at_02():
+    monday = report([0.5] * 12, [0.1] * 12)
+    first, _ = gas.apply_report(gas.empty_state(), monday, MON_16)
+    assert first["totals"]["heating"] == 4.0
+    assert first["closed_through"] is None
+    # Midnight CurrentDay has not reset. Slot 11 belongs to MONDAY.
+    midnight, changed = gas.apply_report(first, monday, TUE_00)
+    assert changed
+    assert midnight["totals"]["heating"] == 6.0
+    assert midnight["totals"]["dhw"] == 1.2
+    assert midnight["days"]["2026-10-26"]["heating"]["11"] == 0.5
+    assert "2026-10-27" not in midnight["days"]
+    assert midnight["closed_through"] == "2026-10-26"
+    assert midnight["previous_day_verified"] is True
+    # Two hours later CurrentDay resets to the brand-new 00-02 bucket.
+    tuesday = report([0.25] * 12, [0.05] * 12)
+    after, changed = gas.apply_report(midnight, tuesday, TUE_02)
+    assert changed
+    assert after["totals"]["heating"] == 6.25
+    assert after["totals"]["dhw"] == 1.25
+    assert after["days"]["2026-10-27"]["heating"]["0"] == 0.25
+    assert after["closed_through"] == "2026-10-26"
+    assert after["continuity_lost"] is False
+    again, changed = gas.apply_report(after, tuesday, TUE_02)
+    assert changed is False
+    assert again == after
+
+
+def test_same_bucket_correction_applies_only_delta_and_may_be_negative():
+    original = [0.5] * 12
+    state, _ = gas.apply_report(
+        gas.empty_state(), report(original, [0.1] * 12), MON_16,
+    )
+    start = state["totals"]["heating"]
+    revised = original.copy()
+    revised[2] = 0.8
+    updated, changed = gas.apply_report(
+        state, report(revised, [0.1] * 12), MON_16,
     )
     assert changed
-    assert s["totals"]["heating"] == 6.25
-    assert s["totals"]["dhw"] == 1.25
-    assert s["closed_through"] == "2026-10-26"
-    assert s["previous_day_verified"] is True
+    assert round(updated["totals"]["heating"] - start, 6) == 0.3
+    revised[2] = 0.2
+    lower, changed = gas.apply_report(
+        updated, report(revised, [0.1] * 12), MON_16,
+    )
+    assert changed
+    assert round(lower["totals"]["heating"] - start, 6) == -0.3
 
 
-def test_same_cloud_bucket_not_counted_twice_or_after_restart():
-    first = gas.empty_state()
+def test_missed_midnight_final_bucket_is_detected_after_02_reset():
+    monday = report([1.0] * 12, [0.5] * 12)
+    state, _ = gas.apply_report(gas.empty_state(), monday, MON_16)
+    # Nothing was read 00:00-02:00, and there is no PreviousDay report.
+    state, _ = gas.apply_report(
+        state, report([1.0] * 12, [0.5] * 12), TUE_02,
+    )
+    assert state["closed_through"] is None
+    assert state["continuity_lost"] is True
+    assert state["days"]["2026-10-26"]["heating"].get("11") is None
+
+
+def test_real_previous_day_report_can_restore_midnight_gap():
+    monday = report([1.0] * 12, [0.5] * 12)
+    state, _ = gas.apply_report(gas.empty_state(), monday, MON_16)
+    current = report(
+        [0.2] * 12, [0.1] * 12,
+        previous=([1.0] * 12, [0.5] * 12),
+    )
+    state, _ = gas.apply_report(state, current, TUE_02)
+    assert state["continuity_lost"] is False
+    assert state["closed_through"] == "2026-10-26"
+    assert state["totals"]["heating"] == 12.2
+
+
+def test_repeated_midnight_poll_is_the_same_day_and_same_slot():
     raw = report([0.5] * 12, [0.1] * 12)
-    applied, _ = gas.apply_report(first, raw, MON)
-    exact_replay, changed = gas.apply_report(applied, raw, MON)
-    assert not changed
-    assert exact_replay["totals"] == applied["totals"]
-    saved = gas.valid_state(exact_replay)
-    assert saved == applied
-    new_day = report([0.25] * 12, [0.05] * 12,
-                     yesterday=([0.5] * 12, [0.1] * 12))
-    closed, _ = gas.apply_report(saved, new_day, TUE)
-    replayed, again = gas.apply_report(closed, new_day, TUE)
-    assert not again
-    assert closed["totals"] == replayed["totals"]
+    s, _ = gas.apply_report(gas.empty_state(), raw, TUE_00)
+    s2, changed = gas.apply_report(s, raw, TUE_00.replace(minute=40))
+    assert changed is False
+    assert s2["totals"]["heating"] == 6.0
 
 
-def test_late_cloud_downward_correction_is_signed_difference_not_reset():
-    s = gas.empty_state()
+def test_missing_day_not_invented_and_no_future_slot_consumption():
     s, _ = gas.apply_report(
-        s, report([0.5] * 12, [0.1] * 12,
-                  yesterday=([1.0] * 12, [0.5] * 12)), MON,
-    )
-    original = s["totals"]["heating"]
-    # A corrected yesterday's 22-24 period drops from 1.0 to 0.8.
-    yesterday = [1.0] * 11 + [0.8]
-    s2, changed = gas.apply_report(
-        s, report([0.5] * 12, [0.1] * 12,
-                  yesterday=(yesterday, [0.5] * 12)), MON,
-    )
-    assert changed
-    assert round(s2["totals"]["heating"] - original, 6) == -0.2
-
-
-def test_without_yesterdays_report_missing_final_slot_is_not_fabricated():
-    s = gas.empty_state()
-    s, _ = gas.apply_report(s, report([1.0] * 12, [0.5] * 12), MON)
-    s, _ = gas.apply_report(s, report([1.0] * 12, [0.5] * 12), TUE)
-    assert s["closed_through"] is None
-    assert s["previous_day_verified"] is False
-    assert s["tracking_start"] == "2026-10-26"
-
-
-def test_skip_across_full_day_is_detected_as_an_unrecoverable_gap():
-    s = gas.empty_state()
-    s, _ = gas.apply_report(s, report([1.0] * 12, [1.0] * 12), MON)
-    # Home Assistant was offline Tuesday; Wednesday's previous day is
-    # Tuesday, so Monday's final slot can no longer be reconstructed.
-    wed_report = report([1.0] * 12, [1.0] * 12,
-                        yesterday=([1.0] * 12, [1.0] * 12))
-    s, _ = gas.apply_report(s, wed_report, WED)
-    assert s["continuity_lost"] is True
-    assert s["closed_through"] is None
-
-
-def test_no_unseen_future_slots_and_no_invalid_data():
-    s = gas.empty_state()
-    s, _ = gas.apply_report(
-        s, report([1.0] * 8 + [999.0] * 4, [1.0] * 12), MON,
+        gas.empty_state(),
+        report([1.0] * 8 + [999.0] * 4, [1.0] * 12),
+        MON_16,
     )
     assert s["totals"]["heating"] == 8.0
-    bad = report([-1.0] * 12, [True] * 12)
-    s2, changed = gas.apply_report(s, bad, MON)
+    s2, changed = gas.apply_report(
+        s, report([-1] * 12, [True] * 12), MON_16,
+    )
     assert not changed
-    assert s2["totals"] == s["totals"]
+    assert s2 == s
+    # Tuesday missed completely, Wednesday cannot fake the history.
+    s3, _ = gas.apply_report(
+        s, report([1] * 12, [1] * 12), WED_02,
+    )
+    assert s3["continuity_lost"] is True
 
 
-def test_persisted_invalid_values_refuse_restore_instead_of_reset():
+def test_invalid_persisted_record_is_not_recreated_silently():
     s = gas.empty_state()
     assert gas.valid_state(s) == s
     s["totals"]["heating"] = float("nan")
     assert gas.valid_state(s) is None
 
 
-def test_dst_date_slot_id_is_stable_on_repeated_local_clock():
-    # Our 12 slot labels are the source histogram's fixed local two-hour
-    # indices. Re-reading either DST fold never creates another slot key.
-    before = datetime(2026, 10, 25, 2, 20, tzinfo=ROME, fold=0)
-    after = before.replace(fold=1)
-    s = gas.empty_state()
-    data = report([0.1] * 12, [0.1] * 12)
-    s, _ = gas.apply_report(s, data, before)
-    s2, changed = gas.apply_report(s, data, after)
-    assert not changed
-    assert s2["totals"] == s["totals"]
+def test_repeated_02_clock_hour_at_end_of_dst_not_double_counted():
+    first = datetime(2026, 10, 25, 2, 20, tzinfo=ROME, fold=0)
+    second = first.replace(fold=1)
+    s, _ = gas.apply_report(
+        gas.empty_state(), report([0.1] * 12, [0.1] * 12), first,
+    )
+    s2, changed = gas.apply_report(
+        s, report([0.1] * 12, [0.1] * 12), second,
+    )
+    assert changed is False
+    assert s2["totals"]["heating"] == 0.1
 
 
-def test_total_gas_entity_declares_ha_energy_supported_state_and_units():
+def test_cumulative_sensor_declares_home_assistant_gas_unit():
     source = (ROOT / "sensor.py").read_text()
-    ledger = source.split("class AristonCumulativeGas", 1)[1]
-    assert "_attr_device_class = SensorDeviceClass.GAS" in ledger
-    assert "_attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS" in ledger
-    assert "_attr_state_class = SensorStateClass.TOTAL" in ledger
-    assert "AristonPhysicalGas" in source
+    cumulative = source.split("class AristonCumulativeGas", 1)[1]
+    assert "_attr_device_class = SensorDeviceClass.GAS" in cumulative
+    assert "_attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS" in cumulative
+    assert "_attr_state_class = SensorStateClass.TOTAL" in cumulative
