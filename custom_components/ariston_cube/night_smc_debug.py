@@ -118,6 +118,15 @@ class NightSmcHistory:
         self._store = Store(hass, _VERSION, f"ariston_cube_night_smc_{entry_id}")
         self._history: list[dict[str, Any]] | None = None
 
+    async def async_get_snapshots(self) -> list[dict[str, Any]]:
+        """Allow HA diagnostics to read yesterday's persisted snapshots."""
+        if self._history is None:
+            restored = await self._store.async_load()
+            if restored is not None and not isinstance(restored, list):
+                raise ValueError("Unexpected stored overnight diagnostic shape")
+            self._history = restored if restored is not None else []
+        return list(self._history)
+
     async def async_record(self, report: Any, now: datetime) -> dict[str, Any]:
         if self._history is None:
             restored = await self._store.async_load()
