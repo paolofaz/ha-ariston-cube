@@ -77,7 +77,6 @@ def test_authentication_and_read_contract():
 
 def test_expired_session_reauthenticates_only_once():
     session = Session(
-        Response(path="/R2/Account/Login"),  # preflight
         Response('{"ok":true}', path="/R2/Home"),  # login
         Response(status=401),  # features -> unauthorized
         Response('{"ok":true}', path="/R2/Home"),  # login again
