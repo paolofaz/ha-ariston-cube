@@ -75,7 +75,9 @@ def test_on_demand_diagnostics_does_not_dump_raw_responses():
 def test_diagnostic_api_does_not_send_control_commands():
     from pathlib import Path
     source = (ROOT / "api.py").read_text(encoding="utf-8")
-    method = source.split("async def async_diagnostic_reports", 1)[1]
+    method = source.split("async def async_diagnostic_reports", 1)[1].split(
+        "async def async_set_plant_control", 1
+    )[0]
     assert 'self._request("GET", path)' in method
     assert '"POST", path, json_body={}' in method
     assert "/set?" not in method
