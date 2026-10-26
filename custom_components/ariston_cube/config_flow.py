@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from aiohttp import CookieJar
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AristonAuthError, AristonClient, AristonConnectionError, AristonResponseError
 from .const import CONF_PLANT_ID, CONF_PLANT_NAME, DOMAIN
@@ -35,7 +34,7 @@ class AristonCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Authenticate and discover plants."""
         errors = {}
         if user_input is not None:
-            session = async_create_clientsession(self.hass, cookie_jar=CookieJar())
+            session = async_get_clientsession(self.hass)
             client = AristonClient(
                 session, user_input[CONF_USERNAME], user_input[CONF_PASSWORD]
             )

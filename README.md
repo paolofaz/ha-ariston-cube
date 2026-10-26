@@ -10,8 +10,8 @@ A new, minimal custom integration for the **Ariston CLAS ONE 30L + Cube S** via 
 ## Scope of milestone 1
 
 - Configuration from **Settings > Devices & services > Add integration** (no YAML).
-- Account authentication and plant selection using the legacy remotethermo API.
-- Cookie-isolated async HTTP sessions and 60-second coordinator polling.
+- Token-based Ariston mobile API authentication and plant selection.
+- Token-authenticated asynchronous HTTP calls and 60-second coordinator polling.
 - Five **read-only** entities: room temperature, heating setpoint, hot-water
   setpoint, heating request, and flame.
 - No writes, scheduling changes, gas conversions or automations.
@@ -50,8 +50,7 @@ midnight resets and corrections.
 ## Data and privacy
 
 Credentials remain in Home Assistant's config entry storage; they are not
-embedded in source code or printed in logs. Use TLS verification and isolated
-cookie sessions. Never attach live credentials, session cookies or unredacted
+embedded in source code or printed in logs. Use TLS verification and never expose bearer tokens or credentials in logs. Never attach live credentials, session cookies or unredacted
 plant/gateway IDs to issues or test fixtures.
 
 ## Development
