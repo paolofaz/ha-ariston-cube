@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from homeassistant.components.http import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +20,8 @@ _FLAG = "ariston_cube_frontend_registered"
 
 async def async_register_weekly_card(hass) -> None:
     """Serve and expose bundled JS without touching user dashboard layouts."""
+    from homeassistant.components.http import StaticPathConfig
+
     if hass.data.get(_FLAG):
         return
     await hass.http.async_register_static_paths([

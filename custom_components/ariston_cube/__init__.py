@@ -27,7 +27,8 @@ async def async_setup_entry(hass, entry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     try:
         await async_register_weekly_card(hass)
-    except (OSError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001
+        # Optional UI must never prevent boiler entity setup.
         _LOGGER.warning("Cube S weekly card could not be registered: %s", type(exc).__name__)
     _LOGGER.info("Ariston Cube 0.7.2 platform setup dispatched")
     return True

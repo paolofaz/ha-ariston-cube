@@ -42,6 +42,12 @@ def _setup_module(monkeypatch):
     package.__path__ = [str(ROOT)]
     api_module = types.ModuleType("_ariston_cube_setup_test.api")
     coordinator_module = types.ModuleType("_ariston_cube_setup_test.coordinator")
+    frontend_module = types.ModuleType("_ariston_cube_setup_test.frontend")
+
+    async def register_mock_frontend(hass):
+        hass.data["ariston_cube_frontend_registered"] = True
+
+    frontend_module.async_register_weekly_card = register_mock_frontend
 
     class Client:
         def __init__(self, session, username, password):
@@ -67,6 +73,7 @@ def _setup_module(monkeypatch):
         "_ariston_cube_setup_test": package,
         "_ariston_cube_setup_test.api": api_module,
         "_ariston_cube_setup_test.coordinator": coordinator_module,
+        "_ariston_cube_setup_test.frontend": frontend_module,
     }.items():
         monkeypatch.setitem(sys.modules, name, fake)
 
@@ -90,9 +97,11 @@ def test_async_setup_entry_reports_success_and_forwards_seven_platforms(monkeypa
             platforms.extend(requested)
 
     entry = types.SimpleNamespace(data={"username": "test-user", "password": "test-password"})
-    hass = types.SimpleNamespace(config_entries=ConfigEntries())
+    hass = types.SimpleNamespace(config_entries=ConfigEntries(), data={})
+
 
     assert asyncio.run(integration.async_setup_entry(hass, entry)) is True
+    assert hass.data["ariston_cube_frontend_registered"] is True
     assert entry.runtime_data.first_refresh_called
     assert set(platforms) == {"sensor", "binary_sensor", "climate", "number", "select", "switch", "calendar"}
 
