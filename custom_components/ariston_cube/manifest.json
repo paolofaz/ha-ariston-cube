@@ -1,7 +1,7 @@
 {
   "domain": "ariston_cube",
   "name": "Ariston Cube",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "config_flow": true,
   "documentation": "https://github.com/paolofaz/ha-ariston-cube",
   "issue_tracker": "https://github.com/paolofaz/ha-ariston-cube/issues",
