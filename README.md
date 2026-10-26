@@ -202,3 +202,14 @@ defines. These readings have not yet been on-device validated in 0.6.1.
 The energy inventory reports 6 usage-code families each across 4 period
 categories, but without actual units or persisted meter semantics we still
 do not expose lifetime counters or create Energy Dashboard entities.
+
+
+## Additional on-demand energy-units diagnostic in 0.6.1
+
+The Ariston mobile API exposes `getConsumptionsSettings` as a read-only
+`POST {}` (unlike its setter). Only **manual Download Diagnostics** calls
+this endpoint. We export its schema and a strict recognized label for
+`gasEnergyUnit`: kWh, GJ, therm, MBtu, Smc or m³. Tariffs and personal
+consumption readings are not exported. The unit label alone does **not**
+prove individual report codes are billed gas or a lifetime meter. The
+electricity unit and origin still need independent confirmation.

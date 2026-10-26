@@ -42,6 +42,8 @@ def _phase(path: str) -> str:
         return "mobile_login"
     if "/plants/lite" in path:
         return "plant_discovery"
+    if "/getConsumptionsSettings" in path:
+        return "consumption_settings_read"
     if "/features?" in path:
         return "features"
     if "/dataItems/" in path:
@@ -232,6 +234,9 @@ class AristonClient:
         paths = {
             "weekly_program": f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si",
             "energy_account": f"/api/v2/remote/reports/{plant_id}/energyAccount",
+            "consumption_settings": (
+                f"/api/v2/remote/plants/{plant_id}/getConsumptionsSettings"
+            ),
             "consumption_sequences": (
                 f"/api/v2/remote/reports/{plant_id}/consSequencesApi8"
                 "?usages=Ch%2CDhw"
@@ -243,7 +248,14 @@ class AristonClient:
                 await self.async_login()
             for kind, path in paths.items():
                 try:
-                    responses[kind] = await self._request("GET", path)
+                    # Ariston's getConsumptionsSettings is a read-only POST {}.
+                    # Do not generalize this exception to control endpoints.
+                    if kind == "consumption_settings":
+                        responses[kind] = await self._request(
+                            "POST", path, json_body={}
+                        )
+                    else:
+                        responses[kind] = await self._request("GET", path)
                 except AristonError as exc:
                     responses[kind] = exc
         return responses

@@ -72,12 +72,14 @@ def test_on_demand_diagnostics_does_not_dump_raw_responses():
     assert "SECRET_GWID" not in repr(result)
 
 
-def test_diagnostic_api_uses_read_requests_only():
+def test_diagnostic_api_does_not_send_control_commands():
     from pathlib import Path
     source = (ROOT / "api.py").read_text(encoding="utf-8")
     method = source.split("async def async_diagnostic_reports", 1)[1]
     assert 'self._request("GET", path)' in method
-    assert '_request("POST"' not in method
+    assert '"POST", path, json_body={}' in method
+    assert "/set?" not in method
+    assert "PlantMenu/Submit" not in method
 
 
 def test_hidden_weekly_and_consumption_fields_are_anonymous_not_erased():
@@ -151,3 +153,45 @@ def test_consumption_metadata_is_fail_closed():
     assert row["series"][0]["period_candidate"] == "unknown"
     assert row["series"][0]["usage_candidate"] == "unknown"
     assert not row["series"][0]["all_samples_numeric"]
+
+
+
+def test_consumption_units_are_allowlisted_and_never_expose_costs():
+    assert diag.safe_consumption_units({"gasEnergyUnit": 0, "gasCost": 9999.9}) == {
+        "gas_unit_candidate": "kWh"
+    }
+    assert diag.safe_consumption_units({"gasEnergyUnit": 4}) == {
+        "gas_unit_candidate": "Smc"
+    }
+    assert diag.safe_consumption_units({"gasEnergyUnit": 999999}) == {
+        "gas_unit_candidate": "unknown"
+    }
+    assert diag.safe_consumption_units({"gasEnergyUnit": True}) == {
+        "gas_unit_candidate": "unknown"
+    }
+    assert diag.safe_consumption_units(None) == {
+        "gas_unit_candidate": "unavailable"
+    }
+
+
+def test_diagnostics_include_only_safe_unit_name_when_present():
+    class Client:
+        async def async_diagnostic_reports(self, plant_id):
+            return {
+                "weekly_program": {"ChZn1": {"plans": []}},
+                "energy_account": {"LastMonth": []},
+                "consumption_sequences": [],
+                "consumption_settings": {
+                    "gasEnergyUnit": 5,
+                    "gasCost": 999.12,
+                    "elecCost": 456.0,
+                },
+            }
+    entry = types.SimpleNamespace(runtime_data=types.SimpleNamespace(
+        client=Client(), plant_id="SECRET_GW"
+    ))
+    result = asyncio.run(diag.async_get_config_entry_diagnostics(None, entry))
+    assert result["consumption_units"] == {"gas_unit_candidate": "m³"}
+    assert "999.12" not in repr(result)
+    assert "456.0" not in repr(result)
+    assert "SECRET_GW" not in repr(result)

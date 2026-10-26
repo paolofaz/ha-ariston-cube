@@ -27,6 +27,7 @@ _ALLOWED_FIELDS = frozenset({
     "gas", "elect", "electricity", "heat", "heating", "cool",
     "ChZn1", "plans", "slices", "temp", "p", "k", "v",
     "electric", "cost", "energy", "total", "totals", "isActive",
+    "gasEnergyUnit", "gasType", "currency", "elecCost", "gasCost",
 })
 
 
@@ -124,6 +125,24 @@ def safe_consumption_inventory(raw: Any) -> dict[str, Any]:
     return {"series_count": len(raw), "series": series}
 
 
+# Codes from the upstream GasEnergyUnit enumeration. This is the unit
+# configured for gas consumption reporting, not proof of metered values.
+GAS_UNIT_CANDIDATES = {
+    0: "kWh", 1: "GJ", 2: "therm", 3: "MBtu",
+    4: "Smc", 5: "m³",
+}
+
+
+def safe_consumption_units(raw: Any) -> dict[str, str]:
+    """Expose only a recognized unit label; never tariff or cost amounts."""
+    if not isinstance(raw, dict):
+        return {"gas_unit_candidate": "unavailable"}
+    value = raw.get("gasEnergyUnit")
+    if type(value) is not int:
+        return {"gas_unit_candidate": "unknown"}
+    return {"gas_unit_candidate": GAS_UNIT_CANDIDATES.get(value, "unknown")}
+
+
 async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     """Issue one manual read per endpoint and report only schemas.
 
@@ -133,7 +152,8 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     coordinator = entry.runtime_data
     snapshots = await coordinator.client.async_diagnostic_reports(coordinator.plant_id)
     safe_reports = {}
-    for key in ("weekly_program", "energy_account", "consumption_sequences"):
+    for key in ("weekly_program", "energy_account", "consumption_sequences",
+                "consumption_settings"):
         result = snapshots.get(key)
         if isinstance(result, AristonError):
             safe_reports[key] = {"error_type": type(result).__name__}
@@ -142,10 +162,13 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     # Only static entity names; no account or plant data in the output.
     return {
         "integration": "ariston_cube",
-        "version": "0.5.1",
+        "version": "0.6.1",
         "purpose": "schema_only_no_personal_values",
         "reports": safe_reports,
         "consumption_inventory": safe_consumption_inventory(
             snapshots.get("consumption_sequences")
+        ),
+        "consumption_units": safe_consumption_units(
+            snapshots.get("consumption_settings")
         ),
     }
