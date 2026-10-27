@@ -63,42 +63,36 @@ def load_module(monkeypatch):
     return module, Error
 
 
-def test_acs_number_reads_value_and_uses_one_degree_steps(monkeypatch):
-    mod, _ = load_module(monkeypatch)
-    values = {"DhwTemp": {"value": 49, "min": 35, "max": 64, "step": 1}}
-    coordinator = types.SimpleNamespace(data=values)
-    entity = mod.AristonCubeNumber(coordinator, "DhwTemp", "acs_temperature", 36, 60, 1)
-    assert entity.native_value == 49.0
-    assert entity.native_min_value == 36
-    assert entity.native_max_value == 60
-    assert entity.native_step == 1
+def test_acs_number_is_not_registered_anymore(monkeypatch):
+    module, _ = load_module(monkeypatch)
+    assert not any(item[0] == "DhwTemp" for item in module._NUMBERS)
 
 
 def test_number_respects_tighter_limits_from_device(monkeypatch):
     mod, _ = load_module(monkeypatch)
-    values = {"DhwTemp": {"value": 50, "min": 40, "max": 55}}
+    values = {"ZoneEconomyTemp": {"value": 20, "min": 15, "max": 25}}
     entity = mod.AristonCubeNumber(
-        types.SimpleNamespace(data=values), "DhwTemp", "acs_temperature", 36, 60, 1
+        types.SimpleNamespace(data=values), "ZoneEconomyTemp", "heating_economy", 10, 30, 0.5
     )
-    assert (entity.native_min_value, entity.native_max_value) == (40, 55)
+    assert (entity.native_min_value, entity.native_max_value) == (15, 25)
 
 
 def test_number_service_calls_coordinator_only_when_valid(monkeypatch):
     mod, Error = load_module(monkeypatch)
 
     class Coordinator:
-        data = {"DhwTemp": {"value": 49, "min": 36, "max": 60}}
+        data = {"ZoneComfortTemp": {"value": 21, "min": 10, "max": 30}}
         writes = []
 
         async def async_set_setpoint(self, field, value):
             self.writes.append((field, value))
 
     coordinator = Coordinator()
-    entity = mod.AristonCubeNumber(coordinator, "DhwTemp", "acs_temperature", 36, 60, 1)
-    asyncio.run(entity.async_set_native_value(50))
-    assert coordinator.writes == [("DhwTemp", 50)]
+    entity = mod.AristonCubeNumber(coordinator, "ZoneComfortTemp", "heating_comfort", 10, 30, 0.5)
+    asyncio.run(entity.async_set_native_value(22))
+    assert coordinator.writes == [("ZoneComfortTemp", 22)]
     try:
-        asyncio.run(entity.async_set_native_value(65))
+        asyncio.run(entity.async_set_native_value(35))
     except Error:
         pass
     else:

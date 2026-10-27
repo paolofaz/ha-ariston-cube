@@ -53,12 +53,6 @@
       "heating_pressure": {
         "name": "Heating circuit pressure"
       },
-      "heating_smc_today": {
-        "name": "Heating gas Smc today"
-      },
-      "dhw_smc_today": {
-        "name": "Hot water gas Smc today"
-      },
       "heating_smc_2h": {
         "name": "Heating gas last completed 2h Smc"
       },
@@ -86,9 +80,6 @@
       }
     },
     "number": {
-      "acs_temperature": {
-        "name": "Hot water temperature"
-      },
       "heating_economy": {
         "name": "Heating Economy temperature"
       },
@@ -112,6 +103,11 @@
     "calendar": {
       "weekly_calendar": {
         "name": "Cube S heating calendar"
+      }
+    },
+    "water_heater": {
+      "acs_temperature": {
+        "name": "Domestic hot water"
       }
     }
   }

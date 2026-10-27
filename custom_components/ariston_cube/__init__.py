@@ -15,7 +15,7 @@ from .frontend import async_register_weekly_card
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.NUMBER, Platform.SELECT, Platform.SWITCH, Platform.CALENDAR)
+PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.WATER_HEATER, Platform.NUMBER, Platform.SELECT, Platform.SWITCH, Platform.CALENDAR)
 
 
 async def async_setup_entry(hass, entry) -> bool:

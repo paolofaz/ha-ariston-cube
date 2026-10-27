@@ -1,8 +1,4 @@
-"""Numeric controls for ACS and Cube S Comfort/Economy temperatures.
-
-Only temperature-setting cloud dataItems with confirmed device limits are
-presented. There is no second climate/water_heater entity for domestic hot water.
-"""
+"""Cube S Comfort and Economy numeric controls (ACS uses water_heater)."""
 
 from __future__ import annotations
 
@@ -20,14 +16,13 @@ _LOGGER = logging.getLogger(__name__)
 
 # Domain-specific caps: the cloud min/max are also enforced by commands.py.
 _NUMBERS: tuple[tuple[str, str, float, float, float], ...] = (
-    ("DhwTemp", "acs_temperature", 36.0, 60.0, 1.0),
     ("ZoneEconomyTemp", "heating_economy", 10.0, 30.0, 0.5),
     ("ZoneComfortTemp", "heating_comfort", 10.0, 30.0, 0.5),
 )
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Register numeric controls for ACS, Comfort and Economy."""
+    """Register numeric controls for heating Comfort and Economy."""
     _LOGGER.info("Ariston Cube number platform setup invoked")
     async_add_entities(
         AristonCubeNumber(entry.runtime_data, field, key, lower, upper, step)

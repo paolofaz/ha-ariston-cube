@@ -67,8 +67,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities.append(AristonWeeklySchedule(schedule))
     smc = AristonSmcCoordinator(hass, coordinator, entry_id=entry.entry_id)
     entities.extend([
-        AristonPhysicalGas(smc, "heating_smc_today", "heating_smc_today"),
-        AristonPhysicalGas(smc, "dhw_smc_today", "dhw_smc_today"),
         AristonPhysicalGas(smc, "heating_smc_2h", "heating_smc_2h"),
         AristonPhysicalGas(smc, "dhw_smc_2h", "dhw_smc_2h"),
         AristonCumulativeGas(smc, "total_heating_smc", "heating_gas_cumulative"),
@@ -78,21 +76,25 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # Remove ONLY that exact registered Cube entity, never Recorder history,
     # legacy Ariston entities, or the verified raw Smc sensor registry entries.
     registry = er.async_get(hass)
-    old_unique_id = f"{coordinator.plant_id}_smc_midnight_debug"
-    old_entity_id = registry.async_get_entity_id(
-        "sensor", "ariston_cube", old_unique_id
-    )
-    if old_entity_id:
-        old_entry = registry.async_get(old_entity_id)
-        if old_entry and old_entry.config_entry_id == entry.entry_id:
-            registry.async_remove(old_entity_id)
+    for suffix in (
+        "smc_midnight_debug",
+        "web_smc_heating_smc_today",
+        "web_smc_dhw_smc_today",
+    ):
+        unique_id = f"{coordinator.plant_id}_{suffix}"
+        old_entity_id = registry.async_get_entity_id(
+            "sensor", "ariston_cube", unique_id
+        )
+        if old_entity_id:
+            old_entry = registry.async_get(old_entity_id)
+            if old_entry and old_entry.config_entry_id == entry.entry_id:
+                registry.async_remove(old_entity_id)
 
     async_add_entities(entities)
 
-    # Ariston publishes its completed two-hour gas buckets on local-clock
-    # boundaries. Read at :10 and :40 after every even hour including
-    # midnight, while the 22:00–00:00 bucket remains available until 02:00.
-    # This avoids missing the final day bucket during the 02:00 reset.
+    # Physical Smc report rolls over at midnight. PreviousDay retains
+    # the complete final 22:00–00:00 slot, including after 02:00.
+    # Read at :10 and :40 after every even hour for timely updates.
     async def _refresh_smc(_now):
         await smc.async_refresh()
 

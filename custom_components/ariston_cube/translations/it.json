@@ -53,12 +53,6 @@
       "heating_pressure": {
         "name": "Pressione circuito riscaldamento"
       },
-      "heating_smc_today": {
-        "name": "Gas riscaldamento oggi Smc"
-      },
-      "dhw_smc_today": {
-        "name": "Gas ACS oggi Smc"
-      },
       "heating_smc_2h": {
         "name": "Gas riscaldamento fascia conclusa Smc"
       },
@@ -86,9 +80,6 @@
       }
     },
     "number": {
-      "acs_temperature": {
-        "name": "Temperatura acqua calda sanitaria"
-      },
       "heating_economy": {
         "name": "Temperatura Economy riscaldamento"
       },
@@ -112,6 +103,11 @@
     "calendar": {
       "weekly_calendar": {
         "name": "Calendario riscaldamento Cube S"
+      }
+    },
+    "water_heater": {
+      "acs_temperature": {
+        "name": "Acqua calda sanitaria"
       }
     }
   }
