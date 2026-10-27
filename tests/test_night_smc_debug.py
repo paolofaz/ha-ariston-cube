@@ -121,13 +121,14 @@ def test_store_retains_snapshots_across_new_collector_instances(monkeypatch):
     assert len(records["ariston_cube_night_smc_fake-entry"]) == 2
 
 
-def test_debug_entity_offers_only_snapshots_and_no_cumulative_meter():
+def test_debug_entity_removed_and_cumulative_gas_totals_enabled():
     source = (ROOT / "sensor.py").read_text()
     setup = source.split("async def async_setup_entry", 1)[1].split(
         "\nclass AristonTemperature", 1
     )[0]
-    assert "AristonSmcOvernightDebug(smc)" in setup
-    assert "AristonCumulativeGas(smc" not in setup
+    assert "AristonSmcOvernightDebug(smc)" not in setup
+    assert "AristonCumulativeGas(smc" in setup
     coordinator = (ROOT / "smc_coordinator.py").read_text()
-    assert "_SMC_TOTALS_VERIFIED = False" in coordinator
-    assert "self.night_history.async_record(" in coordinator
+    assert "_SMC_TOTALS_VERIFIED = False" not in coordinator
+    assert "self.night_history.async_record(" not in coordinator
+    assert "self.gas_ledger.async_apply(report, now)" in coordinator

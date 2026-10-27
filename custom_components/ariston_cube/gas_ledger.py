@@ -20,7 +20,7 @@ from typing import Any
 
 _SERIES = {"Heating": "heating", "Dhw": "dhw"}
 _PERIODS = ("PreviousDay", "CurrentDay")
-_VERSION = 3
+_VERSION = 4
 _SLOT_KEYS = {str(i) for i in range(12)}
 
 
@@ -207,7 +207,7 @@ class StoredGasLedger:
 
     def __init__(self, hass: Any, entry_id: str) -> None:
         from homeassistant.helpers.storage import Store
-        self._store = Store(hass, _VERSION, f"ariston_cube_gas_ledger_{entry_id}")
+        self._store = Store(hass, _VERSION, f"ariston_cube_gas_meter_v1_{entry_id}")
         self._state: dict[str, Any] | None = None
 
     async def async_apply(self, report: Any, now: datetime) -> dict[str, Any]:

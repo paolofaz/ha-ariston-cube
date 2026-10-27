@@ -10,13 +10,9 @@ from homeassistant.util import dt as dt_util
 
 from .smc_report import parse_smc_report
 from .gas_ledger import StoredGasLedger
-from .night_smc_debug import NightSmcHistory
 from .web_portal import WebPortalError
 
 _LOGGER = logging.getLogger(__name__)
-
-# HOLD: midnight Smc histogram timing not yet field-verified.
-_SMC_TOTALS_VERIFIED = False
 
 
 class AristonSmcCoordinator(DataUpdateCoordinator):
@@ -30,8 +26,9 @@ class AristonSmcCoordinator(DataUpdateCoordinator):
         self.client = main.client
         self.plant_id = main.plant_id
         self.plant_name = main.plant_name
-        self.gas_ledger = StoredGasLedger(hass, entry_id) if _SMC_TOTALS_VERIFIED else None
-        self.night_history = NightSmcHistory(hass, entry_id)
+        # Isolated storage namespace prevents experimental 0.8.5/0.8.6
+        # checkpoints (which assumed the wrong rollover) being reused.
+        self.gas_ledger = StoredGasLedger(hass, entry_id)
 
     async def _async_update_data(self):
         try:
@@ -43,31 +40,19 @@ class AristonSmcCoordinator(DataUpdateCoordinator):
                 "heating_smc_2h", "dhw_smc_2h"
             )):
                 raise UpdateFailed("No completed Smc interval in web report")
-            # Diagnostic data are derived from the SAME already fetched
-            # response: no further request to the boiler or cloud.
+            # Persist each newly confirmed two-hour bucket BEFORE publishing
+            # a gas total. Fail closed on corrupt .storage or unsupported
+            # cloud reports; preserve all existing raw Smc sensors.
             try:
-                result["night_debug"] = await self.night_history.async_record(
-                    report, now
-                )
+                meter = await self.gas_ledger.async_apply(report, now)
             except (OSError, ValueError) as exc:
                 _LOGGER.warning(
-                    "Overnight Smc samples not stored: %s", type(exc).__name__
+                    "Persistent Smc meter not updated: %s",
+                    type(exc).__name__,
                 )
-                result["night_debug"] = {
-                    "count": 0, "snapshots": [], "last_capture": None,
-                    "error_type": type(exc).__name__,
+                meter = {
+                    "heating": None, "dhw": None, "history_complete": False
                 }
-
-            # Never create live Energy totals until the 00:00/02:00
-            # physical web histogram has been compared on the real device.
-            meter = {"heating": None, "dhw": None, "history_complete": False}
-            if self.gas_ledger is not None:
-                try:
-                    meter = await self.gas_ledger.async_apply(report, now)
-                except (OSError, ValueError) as exc:
-                    _LOGGER.warning(
-                        "Persistent Smc totals not updated: %s", type(exc).__name__
-                    )
             result["total_heating_smc"] = meter["heating"]
             result["total_dhw_smc"] = meter["dhw"]
             result["history_complete"] = meter["history_complete"]

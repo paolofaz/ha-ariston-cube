@@ -3,7 +3,6 @@
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.const import UnitOfTemperature, UnitOfPressure, UnitOfVolume
 
 from .entity import AristonEntity
@@ -71,8 +70,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         AristonPhysicalGas(smc, "dhw_smc_today", "dhw_smc_today"),
         AristonPhysicalGas(smc, "heating_smc_2h", "heating_smc_2h"),
         AristonPhysicalGas(smc, "dhw_smc_2h", "dhw_smc_2h"),
-        # Expose no unverified cumulative gas totals during night diagnosis.
-        AristonSmcOvernightDebug(smc),
+        AristonCumulativeGas(smc, "total_heating_smc", "heating_gas_cumulative"),
+        AristonCumulativeGas(smc, "total_dhw_smc", "dhw_gas_cumulative"),
     ])
     async_add_entities(entities)
 
@@ -222,7 +221,9 @@ class AristonCumulativeGas(AristonEntity, SensorEntity):
     _attr_icon = "mdi:meter-gas"
 
     def __init__(self, coordinator, source_key: str, translation_key: str):
-        super().__init__(coordinator, "cumulative_gas_" + source_key)
+        # NEW unique ID, not the short-lived 0.8.5/0.8.6 experimental
+        # Energy statistic that may already exist in some Recorder databases.
+        super().__init__(coordinator, "gas_meter_v1_" + source_key)
         self._source_key = source_key
         self._attr_translation_key = translation_key
 
@@ -245,28 +246,3 @@ class AristonCumulativeGas(AristonEntity, SensorEntity):
         return super().available and self.native_value is not None
 
 
-
-class AristonSmcOvernightDebug(AristonEntity, SensorEntity):
-    """Temporary read-only snapshots to verify the actual Smc midnight reset."""
-
-    _attr_name = "Verifica notturna consumi Smc"
-    _attr_icon = "mdi:chart-timeline-variant"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator):
-        super().__init__(coordinator, "smc_midnight_debug")
-
-    @property
-    def native_value(self) -> str:
-        data = (self.coordinator.data or {}).get("night_debug", {})
-        return f"{data.get('count', 0)} letture salvate"
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        saved = (self.coordinator.data or {}).get("night_debug", {})
-        return {
-            "ultima_acquisizione": saved.get("last_capture"),
-            "istantanee": saved.get("snapshots", []),
-            "errore_salvataggio": saved.get("error_type"),
-            "nota": "Numeri Smc delle fasce grezze; nessun contatore alimentato",
-        }

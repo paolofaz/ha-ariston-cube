@@ -10,7 +10,6 @@ from typing import Any
 
 from .api import AristonError
 from .web_portal import WebPortalError, WebPortalComfortShapeError
-from .night_smc_debug import NightSmcHistory
 
 # A strict semantic key allowlist: unknown/dynamic keys are not returned.
 _ALLOWED_FIELDS = frozenset({
@@ -194,17 +193,6 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     coordinator = entry.runtime_data
     snapshots = await coordinator.client.async_diagnostic_reports(coordinator.plant_id)
     comfort_probe = await coordinator.client.async_probe_dhw_comfort_menu(coordinator.plant_id)
-    # Ordinary HA config entries always have entry_id. Lightweight test
-    # fixtures and non-file-backed diagnostic contexts may not.
-    overnight = []
-    if hass is not None and getattr(entry, "entry_id", None):
-        try:
-            overnight = await NightSmcHistory(
-                hass, entry.entry_id
-            ).async_get_snapshots()
-        except (OSError, ValueError) as exc:
-            overnight = [{"error_type": type(exc).__name__}]
-
     safe_reports = {}
     for key in ("weekly_program", "energy_account", "consumption_sequences",
                 "consumption_settings"):
@@ -217,13 +205,12 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     return {
         "integration": "ariston_cube",
         "version": "0.8.8",
-        "purpose": "sanitized_schemas_and_night_smc_volumes",
+        "purpose": "schema_only_no_personal_values",
         "reports": safe_reports,
         "consumption_inventory": safe_consumption_inventory(
             snapshots.get("consumption_sequences")
         ),
         "comfort_acs_menu_probe": safe_dhw_comfort_menu(comfort_probe),
-        "night_smc_snapshots": overnight,
         "consumption_units": safe_consumption_units(
             snapshots.get("consumption_settings")
         ),
