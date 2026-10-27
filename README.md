@@ -1,10 +1,12 @@
-> **EXPERIMENTAL TEST BUILD 1.1.0-rc.2 — NOT the stable 1.0.1.**
+> **EXPERIMENTAL TEST BUILD 1.1.0-rc.3 — NOT the stable 1.0.1.**
 > This branch contains an unsupported, user-triggered Cube S weekly schedule
 > write experiment. The endpoint advertises POST, but its JSON body is still
 > unverified. If the server accepts an unexpected format, saved timings may
 > change. Switching back to stable software **will not revert boiler timings**.
 >
-> **Developer Tools → Actions:** first execute
+> **New weekly Lovelace card editor:** tap any weekday or **Modifica fasce**, select the existing start time and a new time, then use **Anteprima** and **Salva sul Cube S**. Save requires a fresh backend preview and explicit on-screen confirmation. One POST only, followed by full-week readback. The editor is offered only when the experiment's actions are registered.
+>
+> **Developer Tools → Actions:** alternatively, first execute
 > `ariston_cube.preview_weekly_slice` and keep its
 > `source_fingerprint`. Then, only if you deliberately accept a real
 > device write, execute `ariston_cube.test_write_weekly_slice` using the
@@ -22,7 +24,7 @@
 >   confirm: true
 > ```
 >
-> The test performs **one POST only**, followed by one GET. It does not
+> The test performs **one POST only**, followed by one GET. It is not an automatic rollback. It does not
 > retry or roll back. If confirmation fails, use the official Ariston app
 > to inspect the actual programme before trying anything else.
 >
@@ -186,3 +188,28 @@ python -m pytest -q
 Offline tests check data parsing, safety checks and entity contracts; they do **not** replace testing against a real boiler.
 
 Issues and source code: https://github.com/paolofaz/ha-ariston-cube
+
+
+### Testing the experimental Lovelace editor
+
+The bundled `custom:ariston-cube-weekly-card` is the **same card** as before.
+Tap **Modifica fasce** or an individual weekday to reveal an inline editor.
+Only moving an *existing, non-midnight start boundary* is supported in this
+first UI version; adding/removing periods and changing presets are deliberately
+out of scope until separately tested. One edit is attempted at a time.
+
+```yaml
+type: custom:ariston-cube-weekly-card
+entity: sensor.YOUR_ACTUAL_WEEKLY_PROGRAM_ENTITY
+title: Fasce riscaldamento Cube S
+```
+
+With a Storage dashboard, the integration upgrades the registered weekly
+resource to `/ariston_cube/ariston-cube-weekly-card.js?v=1.1.0-rc.3`.
+If the browser still renders the old card, hard-refresh the dashboard.
+YAML resource mode requires updating the resource URL manually. If reverting
+to stable **1.0.1**, also revert the weekly resource URL to `?v=1.0.1` in
+Settings → Dashboards → Resources if the old editor stays cached.
+
+Reinstalling a stable release does **not** restore any Cube S programme
+modified during experiments: review the actual Ariston schedule separately.
