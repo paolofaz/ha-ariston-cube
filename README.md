@@ -1,3 +1,25 @@
+> **EXPERIMENTAL BRANCH — 1.1.0-rc.1 (not the stable 1.0.0 release).**
+> This branch adds a Developer Tools action called `ariston_cube.preview_weekly_slice`.
+> It reads the current weekly programme and shows the effect of moving one
+> existing boundary in a **local draft**. **It does not write the boiler**.
+> The Cube S schedule-write endpoint/payload is still unverified.
+> The stable release remains on `main`; return to stable after field tests.
+>
+> Example in Developer Tools → Actions:
+>
+> ```yaml
+> action: ariston_cube.preview_weekly_slice
+> data:
+>   day: 1
+>   from_time: "06:00"
+>   to_time: "06:15"
+> ```
+>
+> Day numbering: 0 Sunday, 1 Monday, ..., 6 Saturday.
+> Use an existing boundary from the current weekly schedule.
+> The action returns the selected day's before/after preview;
+> `can_submit: false` explicitly confirms no remote schedule change.
+
 # Ariston Cube per Home Assistant
 
 **Versione 1.0.0** — Ariston CLAS ONE 30L + Cube S.
