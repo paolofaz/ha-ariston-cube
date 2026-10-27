@@ -1,8 +1,13 @@
 # Ariston Cube per Home Assistant
 
-**Release candidate: 0.9.0-rc.1** — Ariston CLAS ONE 30L + Cube S.
+**Release candidate attualmente pubblicata: 0.9.0-rc.1** — Ariston CLAS ONE 30L + Cube S.
 Testata con Home Assistant Container / Core 2026.10.4. Le API Ariston
 utilizzate non sono pubblicamente garantite dal produttore.
+
+**Branch di lavoro `chore/post-rc-cleanup` (non rilasciato):** rispetto alla
+0.9.0-rc.1 elimina le due entità Smc biorarie senza toccare i cumulativi.
+Le modifiche qui sotto relative alla pulizia saranno visibili in Home Assistant
+solo dopo una futura release e una nuova installazione via HACS.
 
 ## Pre-release / HACS
 
@@ -13,7 +18,7 @@ visualizzazione beta se necessario) e riavvia completamente HA.
 **Non cancellare la configurazione Ariston Cube né la vecchia integrazione
 ariston.** Conserva i file .storage.
 
-## Entità della RC
+## Entità previste dopo la pulizia
 
 | Tipo | Scopo |
 |---|---|
