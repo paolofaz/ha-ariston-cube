@@ -28,3 +28,27 @@ jobs:
           node --check frontend/ariston-cube-weekly-card.js
       - name: Test Lovelace editor interactions (Node)
         run: node --test tests/test_weekly_editor.mjs
+
+  release-candidate:
+    name: Publish experimental RC
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/cube-s-weekly-schedule-editor'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish v1.1.0-rc.3 (do not replace an existing tag)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.1.0-rc.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.1.0-rc.3 already exists; not retargeting it"
+            exit 0
+          fi
+          gh release create v1.1.0-rc.3 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Ariston Cube 1.1.0-rc.3 — Cube S Weekly Editor Test" \
+            --notes-file docs/releases/v1.1.0-rc.3.md
