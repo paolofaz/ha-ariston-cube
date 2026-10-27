@@ -59,8 +59,13 @@ def test_22_to_00_is_assigned_to_yesterday_then_new_day_starts_at_02():
     first, _ = gas.apply_report(gas.empty_state(), monday, MON_16)
     assert first["totals"]["heating"] == 4.0
     assert first["closed_through"] is None
-    # Midnight CurrentDay has not reset. Slot 11 belongs to MONDAY.
-    midnight, changed = gas.apply_report(first, monday, TUE_00)
+    # At 00:10 the Cloud already moved Monday to PreviousDay.
+    # New Tuesday CurrentDay is empty; Monday's final slot is still there.
+    midnight_report = report(
+        [0] * 12, [0] * 12,
+        previous=([0.5] * 12, [0.1] * 12),
+    )
+    midnight, changed = gas.apply_report(first, midnight_report, TUE_00)
     assert changed
     assert midnight["totals"]["heating"] == 6.0
     assert midnight["totals"]["dhw"] == 1.2
@@ -68,7 +73,7 @@ def test_22_to_00_is_assigned_to_yesterday_then_new_day_starts_at_02():
     assert "2026-10-27" not in midnight["days"]
     assert midnight["closed_through"] == "2026-10-26"
     assert midnight["previous_day_verified"] is True
-    # Two hours later CurrentDay resets to the brand-new 00-02 bucket.
+    # At 02:10 CurrentDay's first completed 00-02 slot is new usage.
     tuesday = report([0.25] * 12, [0.05] * 12)
     after, changed = gas.apply_report(midnight, tuesday, TUE_02)
     assert changed
@@ -129,7 +134,10 @@ def test_real_previous_day_report_can_restore_midnight_gap():
 
 
 def test_repeated_midnight_poll_is_the_same_day_and_same_slot():
-    raw = report([0.5] * 12, [0.1] * 12)
+    raw = report(
+        [0] * 12, [0] * 12,
+        previous=([0.5] * 12, [0.1] * 12),
+    )
     s, _ = gas.apply_report(gas.empty_state(), raw, TUE_00)
     s2, changed = gas.apply_report(s, raw, TUE_00.replace(minute=40))
     assert changed is False
@@ -181,3 +189,29 @@ def test_cumulative_sensor_declares_home_assistant_gas_unit():
     assert "_attr_device_class = SensorDeviceClass.GAS" in cumulative
     assert "_attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS" in cumulative
     assert "_attr_state_class = SensorStateClass.TOTAL" in cumulative
+
+
+
+def test_real_web_night_snapshots_no_duplicate_previousday_after_02():
+    # Exact heating and ACS numbers from 26/27 Oct 2026 field diagnostics.
+    previous_heating = [0, 0, 0, 1.3, 1.24, 0.08, 0.5, 0, 0.4, 0.3, 0.4, 0.4]
+    previous_dhw = [0, 0, 0, 0.2, 0.01, 0.01, 0.2, 0, 0.09, 0.03, 0.01, 0.3]
+    before_heating = previous_heating[:-1] + [0]
+    before_dhw = previous_dhw[:-1] + [0]
+    state, _ = gas.apply_report(
+        gas.empty_state(), report(before_heating, before_dhw), MON_16.replace(hour=22)
+    )
+    assert state["totals"]["heating"] == 4.22
+    assert state["totals"]["dhw"] == 0.55
+    web_midnight = report(
+        [0] * 12, [0] * 12,
+        previous=(previous_heating, previous_dhw),
+    )
+    state, _ = gas.apply_report(state, web_midnight, TUE_00)
+    assert state["totals"]["heating"] == 4.62
+    assert state["totals"]["dhw"] == 0.85
+    assert state["closed_through"] == "2026-10-26"
+    replayed, changed = gas.apply_report(state, web_midnight, TUE_02)
+    assert not changed
+    assert replayed["totals"] == {"heating": 4.62, "dhw": 0.85}
+    assert replayed["continuity_lost"] is False
