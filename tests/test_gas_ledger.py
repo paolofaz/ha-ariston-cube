@@ -212,6 +212,10 @@ def test_real_web_night_snapshots_no_duplicate_previousday_after_02():
     assert state["totals"]["dhw"] == 0.85
     assert state["closed_through"] == "2026-10-26"
     replayed, changed = gas.apply_report(state, web_midnight, TUE_02)
-    assert not changed
+    # 02:10 adds the new day's first completed ZERO slot, not more gas.
+    assert changed
     assert replayed["totals"] == {"heating": 4.62, "dhw": 0.85}
     assert replayed["continuity_lost"] is False
+    repeated, changed = gas.apply_report(replayed, web_midnight, TUE_02.replace(minute=40))
+    assert not changed
+    assert repeated["totals"] == replayed["totals"]
