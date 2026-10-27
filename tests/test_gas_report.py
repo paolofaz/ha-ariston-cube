@@ -68,5 +68,6 @@ def test_mobile_kwh_series_not_created_as_home_assistant_entities():
     assert "AristonRecentGas" not in source
     assert "AristonGasCoordinator" not in source
     assert "recent_gas_" not in source
-    assert "AristonPhysicalGas" in source
+    assert "AristonPhysicalGas" not in source
+    assert "AristonCumulativeGas" in source
 
