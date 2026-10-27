@@ -1,0 +1,114 @@
+{
+  "title": "Ariston Cube",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Ariston NET",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "plant": {
+        "title": "Choose boiler",
+        "data": {
+          "plant_id": "Boiler"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Authentication failed",
+      "cannot_connect": "Cannot reach Ariston NET",
+      "invalid_response": "Unexpected response from Ariston NET",
+      "no_plants": "No boilers found for this account",
+      "unknown": "Invalid boiler selection"
+    },
+    "abort": {
+      "already_configured": "This boiler is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "room_temperature": {
+        "name": "Room temperature"
+      },
+      "heating_setpoint": {
+        "name": "Heating setpoint"
+      },
+      "dhw_setpoint": {
+        "name": "Hot water setpoint"
+      },
+      "weekly_program": {
+        "name": "Cube S weekly programme"
+      },
+      "flow_temperature": {
+        "name": "Heating flow temperature"
+      },
+      "flow_setpoint": {
+        "name": "Heating flow target"
+      },
+      "outside_temperature": {
+        "name": "Outdoor sensor temperature"
+      },
+      "heating_pressure": {
+        "name": "Heating circuit pressure"
+      },
+      "heating_smc_2h": {
+        "name": "Heating gas last completed 2h Smc"
+      },
+      "dhw_smc_2h": {
+        "name": "Hot water gas last completed 2h Smc"
+      },
+      "heating_gas_cumulative": {
+        "name": "Heating gas cumulative, standard cubic meters"
+      },
+      "dhw_gas_cumulative": {
+        "name": "Hot water gas cumulative, standard cubic meters"
+      }
+    },
+    "binary_sensor": {
+      "heat_request": {
+        "name": "Heating request"
+      },
+      "flame": {
+        "name": "Flame"
+      }
+    },
+    "climate": {
+      "cube_s": {
+        "name": "Cube S"
+      }
+    },
+    "number": {
+      "heating_economy": {
+        "name": "Heating Economy temperature"
+      },
+      "heating_comfort": {
+        "name": "Heating Comfort temperature"
+      }
+    },
+    "select": {
+      "plant_mode": {
+        "name": "Boiler mode"
+      }
+    },
+    "switch": {
+      "automatic_thermoregulation": {
+        "name": "Automatic thermoregulation"
+      },
+      "acs_comfort": {
+        "name": "DHW Comfort"
+      }
+    },
+    "calendar": {
+      "weekly_calendar": {
+        "name": "Cube S heating calendar"
+      }
+    },
+    "water_heater": {
+      "acs_temperature": {
+        "name": "Domestic hot water"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "ariston_cube",
+  "name": "Ariston Cube",
+  "version": "0.9.0-rc.1",
+  "config_flow": true,
+  "documentation": "https://github.com/paolofaz/ha-ariston-cube",
+  "issue_tracker": "https://github.com/paolofaz/ha-ariston-cube/issues",
+  "requirements": [],
+  "dependencies": ["frontend", "http"],
+  "after_dependencies": ["lovelace"],
+  "codeowners": [],
+  "iot_class": "cloud_polling"
+}

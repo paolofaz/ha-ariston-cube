@@ -1,0 +1,114 @@
+{
+  "title": "Ariston Cube",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connetti Ariston NET",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "plant": {
+        "title": "Seleziona caldaia",
+        "data": {
+          "plant_id": "Caldaia"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Autenticazione non riuscita",
+      "cannot_connect": "Impossibile raggiungere Ariston NET",
+      "invalid_response": "Risposta imprevista da Ariston NET",
+      "no_plants": "Nessuna caldaia trovata per questo account",
+      "unknown": "Selezione caldaia non valida"
+    },
+    "abort": {
+      "already_configured": "Questa caldaia è già configurata"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "room_temperature": {
+        "name": "Temperatura ambiente"
+      },
+      "heating_setpoint": {
+        "name": "Temperatura impostata riscaldamento"
+      },
+      "dhw_setpoint": {
+        "name": "Temperatura impostata ACS"
+      },
+      "weekly_program": {
+        "name": "Programma settimanale Cube S"
+      },
+      "flow_temperature": {
+        "name": "Temperatura di mandata"
+      },
+      "flow_setpoint": {
+        "name": "Setpoint mandata riscaldamento"
+      },
+      "outside_temperature": {
+        "name": "Temperatura sonda esterna"
+      },
+      "heating_pressure": {
+        "name": "Pressione circuito riscaldamento"
+      },
+      "heating_smc_2h": {
+        "name": "Gas riscaldamento fascia conclusa Smc"
+      },
+      "dhw_smc_2h": {
+        "name": "Gas ACS fascia conclusa Smc"
+      },
+      "heating_gas_cumulative": {
+        "name": "Gas riscaldamento cumulativo (Smc)"
+      },
+      "dhw_gas_cumulative": {
+        "name": "Gas ACS cumulativo (Smc)"
+      }
+    },
+    "binary_sensor": {
+      "heat_request": {
+        "name": "Richiesta riscaldamento"
+      },
+      "flame": {
+        "name": "Fiamma"
+      }
+    },
+    "climate": {
+      "cube_s": {
+        "name": "Cube S"
+      }
+    },
+    "number": {
+      "heating_economy": {
+        "name": "Temperatura Economy riscaldamento"
+      },
+      "heating_comfort": {
+        "name": "Temperatura Comfort riscaldamento"
+      }
+    },
+    "select": {
+      "plant_mode": {
+        "name": "Modalità caldaia"
+      }
+    },
+    "switch": {
+      "automatic_thermoregulation": {
+        "name": "Termoregolazione automatica"
+      },
+      "acs_comfort": {
+        "name": "Comfort ACS"
+      }
+    },
+    "calendar": {
+      "weekly_calendar": {
+        "name": "Calendario riscaldamento Cube S"
+      }
+    },
+    "water_heater": {
+      "acs_temperature": {
+        "name": "Acqua calda sanitaria"
+      }
+    }
+  }
+}
