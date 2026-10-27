@@ -100,3 +100,48 @@ def source_unchanged(preview: dict[str, Any], fresh_read: Any) -> bool:
         return digest == weekly_read_fingerprint(fresh_read)
     except (TypeError, KeyError, ValueError):
         return False
+
+def preview_one_boundary_move(
+    raw: Any, day_index: int, from_time: str, to_time: str
+) -> dict[str, Any]:
+    """Preview moving one REAL boundary in the selected Cube S weekday.
+
+    Only reads the cloud schedule supplied by the caller. The resulting
+    proposal is never sent to a remote endpoint.
+    """
+    import re
+
+    if type(day_index) is not int or not 0 <= day_index < len(DAYS_IT):
+        raise ValueError("day must be 0 (Sunday) through 6 (Saturday)")
+
+    def minute(value: str) -> int:
+        if not isinstance(value, str) or re.fullmatch(
+            r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value
+        ) is None:
+            raise ValueError("Use HH:MM times between 00:00 and 23:59")
+        return int(value[:2]) * 60 + int(value[3:])
+
+    old_minute, new_minute = minute(from_time), minute(to_time)
+    if old_minute == new_minute:
+        raise ValueError("The new boundary must differ from the old boundary")
+
+    day = DAYS_IT[day_index]
+    parsed = parse_weekly_program(raw)
+    slices = parsed["days"][day]
+    if slices is None:
+        raise ValueError("No original programme for this day")
+    if sum(s["minute"] == old_minute for s in slices) != 1:
+        raise ValueError("Original boundary not found on this weekday")
+    if any(s["minute"] == new_minute for s in slices):
+        raise ValueError("A boundary already exists at the target minute")
+
+    proposed = [
+        {"from": new_minute if s["minute"] == old_minute else s["minute"],
+         "temp": 1 if s["preset"] == "Comfort" else 0}
+        for s in slices
+    ]
+    result = preview_day_edit(raw, day, proposed)
+    result["day_index"] = day_index
+    result["from_time"] = from_time
+    result["to_time"] = to_time
+    return result
