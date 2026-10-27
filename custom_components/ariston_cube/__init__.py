@@ -69,9 +69,29 @@ async def async_setup(hass, config) -> bool:
             "can_submit": False,
         }
 
+    async def probe_weekly(call):
+        """Request only OPTIONS metadata for the known schedule-read path."""
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry is required")
+        coordinator = entries[0].runtime_data
+        try:
+            return await coordinator.client.async_probe_weekly_methods(
+                coordinator.plant_id
+            )
+        except AristonError as exc:
+            raise HomeAssistantError("Cube S OPTIONS probe failed") from exc
+
     hass.services.async_register(
         DOMAIN, _PREVIEW_SERVICE, preview,
         schema=schema, supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "probe_weekly_methods", probe_weekly,
+        supports_response=SupportsResponse.ONLY,
     )
     return True
 
