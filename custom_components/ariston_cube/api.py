@@ -302,6 +302,51 @@ class AristonClient:
         except WebPortalError as exc:
             return exc
 
+    async def async_probe_weekly_methods(self, plant_id: str) -> dict[str, Any]:
+        """Read-only HTTP OPTIONS probe on the already-known Cube S GET route.
+
+        OPTIONS sends no schedule payload. An Allow header may indicate
+        supported methods, but does not establish their request schemas.
+        """
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si"
+            headers = {
+                "User-Agent": MOBILE_USER_AGENT,
+                "ar.authToken": self._token or "",
+            }
+            try:
+                async with self._session.request(
+                    "OPTIONS", BASE_URL + path, headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=25),
+                    allow_redirects=False,
+                ) as response:
+                    allow = response.headers.get("Allow", "")
+                    cors = response.headers.get("Access-Control-Allow-Methods", "")
+                    # Only ordinary verb names; do not expose any other
+                    # headers, server error pages, cookies or URLs.
+                    recognized = {"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"}
+                    verbs = sorted({
+                        word.strip().upper()
+                        for word in (allow + "," + cors).split(",")
+                        if word.strip().upper() in recognized
+                    })
+                    return {
+                        "http_status": response.status,
+                        "declared_methods": verbs,
+                        "conclusive": False,
+                        "note": (
+                            "HTTP OPTIONS only. A declared POST/PUT method does not "
+                            "prove the correct weekly-program write payload."
+                        ),
+                    }
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                raise AristonConnectionError(
+                    "HTTP OPTIONS weekly programme probe unavailable"
+                ) from exc
+
+
     async def async_read_weekly_program(self, plant_id: str) -> dict[str, Any]:
         """Read the existing Cube S schedule. Never issue a programme write."""
         async with self._lock:
