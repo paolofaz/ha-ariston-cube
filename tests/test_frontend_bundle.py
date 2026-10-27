@@ -30,3 +30,16 @@ def test_lovelace_dependency_declared_and_versioned():
     assert "http" in manifest["dependencies"]
     assert "lovelace" in manifest["after_dependencies"]
     assert manifest["version"] == "0.8.9"
+
+
+
+def test_optional_acs_card_has_slider_and_separate_comfort_service():
+    card = (ROOT / "www" / "ariston-cube-acs-card.js").read_text()
+    assert 'customElements.define("ariston-cube-acs-card"' in card
+    assert 'range.type = "range"' in card
+    assert 'callService("water_heater", "set_temperature"' in card
+    assert '"switch", current ? "turn_off" : "turn_on"' in card
+    assert "fetch(" not in card
+    frontend = (ROOT / "frontend.py").read_text()
+    assert "_ACS_CARD_PATH" in frontend
+    assert "_ACS_CARD_RESOURCE" in frontend

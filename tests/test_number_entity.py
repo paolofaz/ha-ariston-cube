@@ -97,7 +97,7 @@ def test_number_service_calls_coordinator_only_when_valid(monkeypatch):
         pass
     else:
         assert False, "Expected bounded temperature to fail"
-    assert coordinator.writes == [("DhwTemp", 50)]
+    assert coordinator.writes == [("ZoneComfortTemp", 22)]
 
 
 def test_economy_number_unavailable_when_cloud_has_no_value(monkeypatch):

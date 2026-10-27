@@ -41,6 +41,7 @@ def test_no_kwh_gas_sensors_in_translations():
         for key in ("heating_gas_today", "dhw_gas_today",
                     "heating_gas_2h", "dhw_gas_2h"):
             assert key not in data["entity"]["sensor"]
-        for key in ("heating_smc_today", "dhw_smc_today",
-                    "heating_smc_2h", "dhw_smc_2h"):
+        for key in ("heating_smc_today", "dhw_smc_today"):
+            assert key not in data["entity"]["sensor"]
+        for key in ("heating_smc_2h", "dhw_smc_2h"):
             assert key in data["entity"]["sensor"]
