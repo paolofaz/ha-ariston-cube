@@ -1,20 +1,28 @@
-/* Ariston Cube weekly Lovelace view. Read-only; no cloud write or polling. */
+/* Ariston Cube weekly card, experimental edit mode (1.1.0-rc.3).
+ * Only one existing time boundary can be moved per save.
+ * The backend performs a fresh GET, fingerprint check, ONE POST, full readback.
+ * Never send requests directly to Ariston from this Lovelace card.
+ */
 (function () {
   "use strict";
   const DAYS = [
-    ["Lunedì", "Lun"], ["Martedì", "Mar"], ["Mercoledì", "Mer"],
-    ["Giovedì", "Gio"], ["Venerdì", "Ven"], ["Sabato", "Sab"],
-    ["Domenica", "Dom"]
+    ["Lunedì", "Lun", 1], ["Martedì", "Mar", 2],
+    ["Mercoledì", "Mer", 3], ["Giovedì", "Gio", 4],
+    ["Venerdì", "Ven", 5], ["Sabato", "Sab", 6],
+    ["Domenica", "Dom", 0]
   ];
   const css = [
     ":host{display:block;color:var(--primary-text-color)}",
     "ha-card{display:block;padding:20px 18px}",
+    ".heading{display:flex;align-items:center;justify-content:space-between;gap:12px}",
     "h2{font-size:1.12rem;font-weight:600;margin:0 0 4px}",
     ".subtitle,.footer,.times{color:var(--secondary-text-color);font-size:.75rem}",
     ".subtitle{margin:0 0 14px}.footer{margin:16px 0 0}",
     ".axis{margin:4px 0 8px 49px;display:flex;justify-content:space-between;font-size:.73rem;color:var(--secondary-text-color)}",
     ".day{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;column-gap:11px;padding:9px 0;border-top:1px solid var(--divider-color)}",
     ".day.today .name{font-weight:700;color:var(--primary-color)}",
+    ".day.editable{cursor:pointer;border-radius:6px}",
+    ".day.selected{background:var(--secondary-background-color)}",
     ".name{font-size:.82rem;font-weight:600}",
     ".bar{height:32px;position:relative;overflow:hidden;border:1px solid var(--divider-color);border-radius:7px;background:var(--secondary-background-color)}",
     ".segment{position:absolute;top:0;bottom:0}",
@@ -26,16 +34,34 @@
     ".dot{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px}",
     ".dot.comfort{background:var(--primary-color,#5b9ad0)}",
     ".dot.economy{background:color-mix(in srgb,var(--primary-color,#5b9ad0) 27%,var(--card-background-color,#fff))}",
+    ".btn{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit}",
+    ".btn.primary{background:var(--primary-color);color:var(--text-primary-color,#fff);border-color:var(--primary-color)}",
+    ".btn:disabled{opacity:.48;cursor:not-allowed}",
+    ".editor{margin-top:16px;padding:14px;border:1px solid var(--divider-color);border-radius:10px}",
+    ".editor h3{margin:0 0 12px;font-size:.98rem}",
+    ".fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}",
+    ".field{display:flex;flex-direction:column;gap:5px;font-size:.82rem}",
+    ".field select,.field input{box-sizing:border-box;width:100%;padding:9px;border:1px solid var(--divider-color);border-radius:7px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit}",
+    ".buttons{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}",
+    ".message{margin:12px 0 0;font-size:.82rem;line-height:1.5}",
+    ".message.error{color:var(--error-color,#d74343)}",
+    ".message.success{color:var(--success-color,#348747)}",
+    ".preview{margin-top:12px;border-top:1px solid var(--divider-color);padding-top:12px}",
+    ".preview strong{font-size:.86rem}",
+    ".preview .line{font-size:.83rem;margin:5px 0}",
     "@media(min-width:700px){.day{grid-template-columns:38px minmax(0,1fr) minmax(190px,1fr)}.times{grid-column:3;margin-left:12px}.bar{height:34px}}"
   ].join("");
 
-  const el = (tag, className, text) => {
+  function el(tag, className, text) {
     const item = document.createElement(tag);
     if (className) item.className = className;
     if (text != null) item.textContent = String(text);
     return item;
-  };
-
+  }
+  function time(minute) {
+    return String(Math.floor(minute / 60)).padStart(2, "0")
+      + ":" + String(minute % 60).padStart(2, "0");
+  }
   function parseDay(value) {
     if (typeof value !== "string") return null;
     const points = [];
@@ -43,14 +69,12 @@
     for (const hit of value.matchAll(pattern)) {
       const h = Number(hit[1]), m = Number(hit[2]);
       if (h < 24 && m < 60) points.push({
-        minute: h * 60 + m,
-        preset: hit[3].toLowerCase()
+        minute: h * 60 + m, preset: hit[3].toLowerCase()
       });
     }
     points.sort((a, b) => a.minute - b.minute);
     return points.length ? points : null;
   }
-
   function intervals(weekly, dayIndex) {
     if (!weekly[dayIndex]) return null;
     const pieces = [...weekly[dayIndex]];
@@ -67,6 +91,15 @@
       preset: point.preset
     })).filter((period) => period.end > period.start);
   }
+  function describe(points) {
+    return Array.isArray(points)
+      ? points.map((p) => p.time + " " + p.preset).join(" · ")
+      : "Non disponibile";
+  }
+  function validTime(value) {
+    return typeof value === "string"
+      && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+  }
 
   class AristonCubeWeeklyCard extends HTMLElement {
     static getStubConfig() {
@@ -79,17 +112,256 @@
       this.config = {entity: config.entity, title: config.title || "Fasce riscaldamento Cube S"};
       if (!this.shadowRoot) this.attachShadow({mode: "open"});
       this.key = "";
+      this.editing = false;
+      this.dayIndex = 0;
+      this.fromTime = "";
+      this.toTime = "";
+      this.preview = null;
+      this.pending = false;
+      this.blocked = false;
+      this.message = "";
+      this.messageKind = "";
+      this.displayedSchedule = "";
       if (this.homeAssistant) this.render();
     }
     set hass(value) {
       this.homeAssistant = value;
       if (this.config) this.render();
     }
-    getCardSize() {return 6;}
+    getCardSize() {return this.editing ? 10 : 6;}
+    get _weekly() {
+      const state = this.homeAssistant?.states?.[this.config.entity];
+      return DAYS.map((d) => parseDay(state?.attributes?.[d[0]]));
+    }
+    get _canEdit() {
+      const services = this.homeAssistant?.services?.ariston_cube || {};
+      return Boolean(services.preview_weekly_slice && services.test_write_weekly_slice
+        && typeof this.homeAssistant.callService === "function");
+    }
+    _invalidatePreview() {
+      this.preview = null;
+      this.message = "";
+      this.messageKind = "";
+    }
+    _setDay(index) {
+      if (this.pending || this.blocked) return;
+      const weekly = this._weekly;
+      this.dayIndex = index;
+      const boundaries = (weekly[index] || []).filter((p) => p.minute > 0);
+      this.fromTime = boundaries.length ? time(boundaries[0].minute) : "";
+      this.toTime = this.fromTime;
+      this._invalidatePreview();
+      this.key = "";
+      this.render();
+    }
+    _toggleEdit(index = this.dayIndex) {
+      if (this.pending) return;
+      if (!this._canEdit) return;
+      this.editing = !this.editing;
+      this.blocked = false;
+      this._invalidatePreview();
+      if (this.editing) this._setDay(index);
+      this.key = "";
+      this.render();
+    }
+    async _invoke(service, data) {
+      // Home Assistant's callService signature includes notifyOnError as the
+      // fifth argument and returnResponse as the SIXTH argument.
+      const result = await this.homeAssistant.callService(
+        "ariston_cube", service, data, undefined, false, true
+      );
+      if (!result || !result.response) {
+        throw new Error("Nessuna risposta dall'azione Home Assistant");
+      }
+      return result.response;
+    }
+    async _previewChange() {
+      if (this.pending || this.blocked || !this._canEdit) return;
+      if (!validTime(this.fromTime) || !validTime(this.toTime)
+          || this.fromTime === this.toTime) {
+        this.message = "Scegli un nuovo orario diverso da quello attuale.";
+        this.messageKind = "error";
+        this.key = "";
+        this.render();
+        return;
+      }
+      const day = DAYS[this.dayIndex][2];
+      const from = this.fromTime, to = this.toTime;
+      this.pending = true;
+      this._invalidatePreview();
+      this.key = "";
+      this.render();
+      try {
+        const result = await this._invoke("preview_weekly_slice", {
+          day, from_time: from, to_time: to
+        });
+        if (result.status !== "preview_only_no_cloud_write"
+            || result.changed !== true
+            || typeof result.source_fingerprint !== "string"
+            || !/^[a-f0-9]{64}$/.test(result.source_fingerprint)
+            || result.weekday !== DAYS[this.dayIndex][0]
+            || !Array.isArray(result.before) || !Array.isArray(result.after)
+            || this.fromTime !== from || this.toTime !== to) {
+          throw new Error("Anteprima non coerente. Nessuna modifica inviata.");
+        }
+        this.preview = result;
+        this.message = "Anteprima letta dal cloud. Controlla gli orari prima di salvare.";
+        this.messageKind = "";
+      } catch (err) {
+        this.message = "Anteprima fallita: " + (err?.message || "errore sconosciuto");
+        this.messageKind = "error";
+      } finally {
+        this.pending = false;
+        this.key = "";
+        this.render();
+      }
+    }
+    async _saveChange() {
+      if (this.pending || this.blocked || !this.preview || !this._canEdit) return;
+      const before = this.preview.before, after = this.preview.after;
+      const fingerprint = this.preview.source_fingerprint;
+      const weekday = DAYS[this.dayIndex][0];
+      if (!Array.isArray(before) || !Array.isArray(after)
+          || !/^[a-f0-9]{64}$/.test(fingerprint)) return;
+      const confirmation = "Scrivere sul Cube S la modifica di " + weekday
+        + "?\n\nPRIMA: " + describe(before) + "\nDOPO: " + describe(after)
+        + "\n\nIl salvataggio è reale e non si annulla reinstallando la stable.";
+      if (!window.confirm(confirmation)) return;
+      this.pending = true;
+      this.blocked = true;  // At most one write attempt in this card session.
+      this.key = "";
+      this.render();
+      try {
+        const result = await this._invoke("test_write_weekly_slice", {
+          day: DAYS[this.dayIndex][2],
+          from_time: this.fromTime, to_time: this.toTime,
+          expected_fingerprint: fingerprint, confirm: true
+        });
+        if (result.status !== "confirmed_by_fresh_cloud_read" || result.changed !== true) {
+          throw new Error("Risposta non confermata. Verifica nell'app Ariston.");
+        }
+        this.preview = null;
+        this.message = "Modifica confermata dal cloud. Controlla anche l'app Ariston.";
+        this.messageKind = "success";
+      } catch (err) {
+        this.preview = null;
+        this.message = "Salvataggio non confermato: "
+          + (err?.message || "errore sconosciuto")
+          + ". Prima di riprovare, controlla la programmazione nell'app Ariston.";
+        this.messageKind = "error";
+      } finally {
+        this.pending = false;
+        this.key = "";
+        this.render();
+      }
+    }
+    _renderEditor(haCard, weekly) {
+      const editor = el("section", "editor");
+      editor.append(el("h3", "", "Modifica una fascia esistente"));
+      editor.append(el("p", "subtitle",
+        "Un solo cambio orario per volta. Le altre fasce e gli altri giorni devono rimanere invariati."));
+      const fields = el("div", "fields");
+      const dayField = el("label", "field", "Giorno");
+      const daySelect = el("select");
+      daySelect.setAttribute("aria-label", "Giorno");
+      DAYS.forEach(([label], index) => {
+        const opt = el("option", "", label);
+        opt.value = String(index);
+        daySelect.append(opt);
+      });
+      daySelect.value = String(this.dayIndex);
+      daySelect.disabled = this.pending || this.blocked;
+      daySelect.addEventListener("change", () => this._setDay(Number(daySelect.value)));
+      dayField.append(daySelect);
+      fields.append(dayField);
+      const fromField = el("label", "field", "Fascia da spostare");
+      const fromSelect = el("select");
+      fromSelect.setAttribute("aria-label", "Fascia da spostare");
+      const boundaries = (weekly[this.dayIndex] || []).filter((p) => p.minute > 0);
+      if (!boundaries.length) {
+        const opt = el("option", "", "Nessuna fascia disponibile");
+        opt.value = "";
+        fromSelect.append(opt);
+      }
+      boundaries.forEach((point) => {
+        const value = time(point.minute);
+        const opt = el("option", "", value + " " + point.preset);
+        opt.value = value;
+        fromSelect.append(opt);
+      });
+      if (boundaries.some((point) => time(point.minute) === this.fromTime)) {
+        fromSelect.value = this.fromTime;
+      }
+      fromSelect.disabled = this.pending || this.blocked || !boundaries.length;
+      fromSelect.addEventListener("change", () => {
+        this.fromTime = fromSelect.value;
+        this.toTime = this.fromTime;
+        this._invalidatePreview();
+        this.key = "";
+        this.render();
+      });
+      fromField.append(fromSelect);
+      fields.append(fromField);
+      const toField = el("label", "field", "Nuovo orario");
+      const toInput = el("input");
+      toInput.type = "time";
+      toInput.step = "900";
+      toInput.value = this.toTime || this.fromTime;
+      toInput.disabled = this.pending || this.blocked || !boundaries.length;
+      toInput.addEventListener("change", () => {
+        this.toTime = toInput.value;
+        this._invalidatePreview();
+        this.key = "";
+        this.render();
+      });
+      toField.append(toInput);
+      fields.append(toField);
+      editor.append(fields);
+      const actions = el("div", "buttons");
+      const previewBtn = el("button", "btn primary", this.pending ? "Operazione in corso…" : "Anteprima");
+      previewBtn.type = "button";
+      previewBtn.disabled = this.pending || this.blocked || !boundaries.length
+        || !validTime(this.toTime) || this.fromTime === this.toTime;
+      previewBtn.addEventListener("click", () => this._previewChange());
+      actions.append(previewBtn);
+      const saveBtn = el("button", "btn", "Salva sul Cube S");
+      saveBtn.type = "button";
+      saveBtn.disabled = this.pending || this.blocked || !this.preview
+        || this.preview.changed !== true;
+      saveBtn.addEventListener("click", () => this._saveChange());
+      actions.append(saveBtn);
+      editor.append(actions);
+      if (this.preview) {
+        const previewBox = el("div", "preview");
+        previewBox.append(el("strong", "", "Anteprima dal cloud — " + this.preview.weekday));
+        previewBox.append(el("p", "line", "Prima: " + describe(this.preview.before)));
+        previewBox.append(el("p", "line", "Dopo: " + describe(this.preview.after)));
+        editor.append(previewBox);
+      }
+      if (this.message) {
+        const message = el("p", "message " + this.messageKind, this.message);
+        message.setAttribute("role", this.messageKind === "error" ? "alert" : "status");
+        editor.append(message);
+      }
+      if (this.blocked) {
+        editor.append(el("p", "footer",
+          "Sessione di modifica conclusa. Per una nuova modifica, chiudi e riapri l'editor dopo avere verificato l'app Ariston."));
+      }
+      haCard.append(editor);
+    }
     render() {
-      const state = this.homeAssistant.states[this.config.entity];
-      const values = DAYS.map((d) => state && state.attributes[d[0]]);
-      const current = JSON.stringify([state && state.state, values, this.config.title]);
+      if (!this.homeAssistant || !this.config) return;
+      const state = this.homeAssistant.states?.[this.config.entity];
+      const values = DAYS.map((d) => state?.attributes?.[d[0]]);
+      const scheduleKey = JSON.stringify(values);
+      if (this.preview && this.displayedSchedule && this.displayedSchedule !== scheduleKey) {
+        this._invalidatePreview(); // A live schedule update invalidates approval.
+      }
+      this.displayedSchedule = scheduleKey;
+      const current = JSON.stringify([state?.state, values, this.config.title,
+        this.editing, this.dayIndex, this.fromTime, this.toTime,
+        Boolean(this.preview), this.pending, this.blocked,
+        this.message, this.messageKind, this._canEdit]);
       if (this.key === current) return;
       this.key = current;
       const weekly = values.map(parseDay);
@@ -97,16 +369,26 @@
       const root = this.shadowRoot;
       const style = el("style"); style.textContent = css;
       const haCard = el("ha-card");
-      haCard.append(el("h2", "", this.config.title));
+      const heading = el("div", "heading");
+      heading.append(el("h2", "", this.config.title));
+      if (this._canEdit) {
+        const toggle = el("button", "btn", this.editing ? "Chiudi editor" : "Modifica fasce");
+        toggle.type = "button";
+        toggle.disabled = this.pending;
+        toggle.addEventListener("click", () => this._toggleEdit());
+        heading.append(toggle);
+      }
+      haCard.append(heading);
       haCard.append(el("p", "subtitle", "Programmazione reale del Cube S"));
       if (!state) haCard.append(el("p", "subtitle", "Sensore non disponibile: " + this.config.entity));
       const axis = el("div", "axis");
-      for (const hour of ["00", "06", "12", "18", "24"]) {
-        axis.append(el("span", "", hour));
-      }
+      for (const hour of ["00", "06", "12", "18", "24"]) axis.append(el("span", "", hour));
       haCard.append(axis);
       DAYS.forEach(([name, short], index) => {
-        const row = el("div", "day" + (index === activeDay ? " today" : ""));
+        const editable = this._canEdit && !this.pending && !this.blocked;
+        const row = el("div", "day" + (index === activeDay ? " today" : "")
+          + (editable ? " editable" : "")
+          + (this.editing && index === this.dayIndex ? " selected" : ""));
         row.append(el("span", "name", short));
         const bar = el("div", "bar");
         const slices = intervals(weekly, index);
@@ -114,13 +396,27 @@
           const segment = el("span", "segment " + period.preset);
           segment.style.left = (period.start / 1440 * 100) + "%";
           segment.style.width = ((period.end - period.start) / 1440 * 100) + "%";
-          const t = (m) => String(Math.floor(m / 60)).padStart(2, "0")
-            + ":" + String(m % 60).padStart(2, "0");
-          segment.title = t(period.start) + "–" + t(period.end) + " " + period.preset;
+          segment.title = time(period.start) + "–" + time(period.end) + " " + period.preset;
           bar.append(segment);
         });
         row.append(bar);
         row.append(el("p", "times", values[index] || "Nessun programma disponibile"));
+        if (editable) {
+          row.tabIndex = 0;
+          row.setAttribute("role", "button");
+          row.setAttribute("aria-label", "Modifica fasce di " + name);
+          const selectDay = () => {
+            if (!this.editing) this._toggleEdit(index);
+            else this._setDay(index);
+          };
+          row.addEventListener("click", selectDay);
+          row.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectDay();
+            }
+          });
+        }
         haCard.append(row);
       });
       const legend = el("div", "legend");
@@ -131,7 +427,11 @@
         legend.append(item);
       }
       haCard.append(legend);
-      haCard.append(el("p", "footer", "Sola lettura: le fasce originali restano gestite dal Cube S."));
+      if (this.editing && this._canEdit) this._renderEditor(haCard, weekly);
+      haCard.append(el("p", "footer",
+        this._canEdit
+          ? "Premi un giorno o «Modifica fasce». Il salvataggio richiede anteprima e conferma."
+          : "Sola lettura: le fasce originali restano gestite dal Cube S."));
       root.replaceChildren(style, haCard);
     }
   }
@@ -141,7 +441,7 @@
     window.customCards.push({
       type: "ariston-cube-weekly-card",
       name: "Ariston Cube · Settimana Comfort/Economy",
-      description: "Timeline settimanale dalla programmazione originale Cube S"
+      description: "Timeline settimanale con editor sperimentale per singole fasce"
     });
   }
 })();
