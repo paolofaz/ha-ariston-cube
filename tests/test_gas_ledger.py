@@ -219,3 +219,82 @@ def test_real_web_night_snapshots_no_duplicate_previousday_after_02():
     repeated, changed = gas.apply_report(replayed, web_midnight, TUE_02.replace(minute=40))
     assert not changed
     assert repeated["totals"] == replayed["totals"]
+
+
+
+def test_real_27_october_report_initializes_cumulative_from_complete_yesterday():
+    previous_heating = [0, 0, 0, 1.3, 1.24, 0.08, 0.5, 0, 0.4, 0.3, 0.4, 0.4]
+    previous_dhw = [0, 0, 0, 0.2, 0.01, 0.01, 0.2, 0, 0.09, 0.03, 0.01, 0.3]
+    today_heating = [0.1, 0.15] + [0] * 10
+    today_dhw = [0.2, 0.05] + [0] * 10
+    at = TUE_02.replace(hour=4, minute=15)
+    s, changed = gas.apply_report(
+        gas.empty_state(), report(today_heating, today_dhw,
+                                  previous=(previous_heating, previous_dhw)),
+        at,
+    )
+    assert changed
+    assert s["totals"] == {"heating": 4.87, "dhw": 1.1}
+    assert s["closed_through"] == "2026-10-26"
+    assert s["continuity_lost"] is False
+    s2, changed = gas.apply_report(
+        s, report(today_heating, today_dhw,
+                  previous=(previous_heating, previous_dhw)), at,
+    )
+    assert changed is False
+    assert s2["totals"] == s["totals"]
+
+
+def test_new_storage_namespace_does_not_reuse_prototype_checkpoint(monkeypatch):
+    import asyncio
+    import types
+    records = {}
+
+    class MockStore:
+        def __init__(self, hass, version, key):
+            self.key = key
+            self.version = version
+
+        async def async_load(self):
+            return records.get(self.key)
+
+        async def async_save(self, data):
+            records[self.key] = data
+
+    storage = types.ModuleType("homeassistant.helpers.storage")
+    storage.Store = MockStore
+    monkeypatch.setitem(sys.modules, "homeassistant.helpers.storage", storage)
+    records["ariston_cube_gas_ledger_test-entry"] = {
+        "version": 3, "corrupt": "OLD_EXPERIMENTAL_DATA"
+    }
+    old = [0.5] * 12
+    current = [0.2] + [0.0] * 11
+    payload = report(current, current, previous=(old, old))
+    ledger = gas.StoredGasLedger(None, "test-entry")
+    meter = asyncio.run(ledger.async_apply(payload, TUE_02))
+    assert meter["history_complete"] is True
+    assert meter["heating"] == 6.2
+    assert meter["dhw"] == 6.2
+    assert "ariston_cube_gas_meter_v1_test-entry" in records
+    assert records["ariston_cube_gas_ledger_test-entry"]["corrupt"] == (
+        "OLD_EXPERIMENTAL_DATA"
+    )
+    # Subsequent Home Assistant restart reads persisted slot keys, never
+    # adds the same slots again.
+    restored = gas.StoredGasLedger(None, "test-entry")
+    second = asyncio.run(restored.async_apply(payload, TUE_02))
+    assert second == meter
+
+
+def test_dashboard_meters_have_fresh_unique_ids_and_not_original_debug_entity():
+    source = (ROOT / "sensor.py").read_text()
+    setup = source.split("async def async_setup_entry", 1)[1].split(
+        "\nclass AristonTemperature", 1
+    )[0]
+    assert 'AristonCumulativeGas(smc, "total_heating_smc"' in setup
+    assert 'AristonCumulativeGas(smc, "total_dhw_smc"' in setup
+    assert 'super().__init__(coordinator, "gas_meter_v1_" + source_key)' in source
+    assert "AristonSmcOvernightDebug(smc)" not in setup
+    assert "old_entry.config_entry_id == entry.entry_id" in setup
+    assert '"sensor", "ariston_cube", old_unique_id' in setup
+    assert "registry.async_remove(old_entity_id)" in setup
