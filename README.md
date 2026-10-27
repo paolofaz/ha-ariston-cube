@@ -1,24 +1,23 @@
 # Ariston Cube per Home Assistant
 
-**Release candidate attualmente pubblicata: 0.9.0-rc.1** — Ariston CLAS ONE 30L + Cube S.
-Testata con Home Assistant Container / Core 2026.10.4. Le API Ariston
-utilizzate non sono pubblicamente garantite dal produttore.
+**Versione 1.0.0** — Ariston CLAS ONE 30L + Cube S.
+Verificata con Home Assistant Container / Core 2026.10.4.
+Le API Ariston utilizzate non sono pubblicamente garantite dal produttore.
+La versione 1.0.0 consolida il conteggio Smc cumulativo, i controlli
+riscaldamento/ACS e il selettore AUTO/Manuale. La scrittura della
+programmazione Cube S resta volutamente esclusa.
 
-**Branch di lavoro `chore/post-rc-cleanup` (non rilasciato):** rispetto alla
-0.9.0-rc.1 elimina le due entità Smc biorarie senza toccare i cumulativi.
-Le modifiche qui sotto relative alla pulizia saranno visibili in Home Assistant
-solo dopo una futura release e una nuova installazione via HACS.
+## Installazione / HACS
 
-## Pre-release / HACS
+Il codice della 1.0.0 è destinato a **main**.
+Per distribuire tramite HACS serve una release GitHub che punti al commit
+della 1.0.0 e abbia tag **v1.0.0** (non riutilizzare i tag RC precedenti).
+Selezionare la release in HACS e riavviare Home Assistant.
+Non cancellare la configurazione Ariston Cube, il database Recorder
+né i file `.storage` del registro gas: contengono dati persistenti.
+Conservare il backup pre-migrazione delle statistiche Energia.
 
-Il codice RC è su **main**. Per installarlo tramite HACS, crea una
-**GitHub pre-release** dal commit attuale di main con il tag esatto
-**v0.9.0-rc.1**. Seleziona poi la pre-release in HACS (attiva la
-visualizzazione beta se necessario) e riavvia completamente HA.
-**Non cancellare la configurazione Ariston Cube né la vecchia integrazione
-ariston.** Conserva i file .storage.
-
-## Entità previste dopo la pulizia
+## Entità della versione 1.0.0
 
 | Tipo | Scopo |
 |---|---|
@@ -73,9 +72,9 @@ modalità Storage. Se Lovelace usa risorse YAML, aggiungi:
 
 ~~~yaml
 resources:
-  - url: /ariston_cube/ariston-cube-acs-card.js?v=0.9.0-rc.1
+  - url: /ariston_cube/ariston-cube-acs-card.js?v=1.0.0
     type: module
-  - url: /ariston_cube/ariston-cube-weekly-card.js?v=0.9.0-rc.1
+  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.0.0
     type: module
 ~~~
 
@@ -148,9 +147,10 @@ sugli statistic_id dei due cumulativi Ariston Cube dopo backup e
 verifica dei raccordi. **Questa integrazione non esegue migrazioni DB**
 e non modifica `statistics_meta`, Recorder o la dashboard Energia.
 Non ripetere la migrazione SQL su un impianto già migrato.
-Conservare il backup pre-migrazione fino alla conferma dei consumi
-successivi. Prima di rimuovere la vecchia integrazione verificare
-che nessuna automazione, template o dashboard usi entità obsolete.
+Conservare il backup pre-migrazione. Sull'impianto di riferimento la
+vecchia integrazione Ariston è stata dismessa e i cumulativi continuano
+a crescere; prima di una dismissione su altri impianti verificare sempre
+template, automazioni, dashboard e statistiche.
 
 ## Modalità riscaldamento e sensore fiamma
 
@@ -180,13 +180,15 @@ Un token mobile NON autentica /R2. Le sessioni sono isolate per
 evitare di mescolare cookie/token e vengono rinnovate separatamente.
 Le diagnostiche non espongono credenziali o risposte cloud integrali.
 
-## Roadmap dopo questa pre-release
+## Roadmap dopo la 1.0.0
 
-1. Validazione live dei cumulativi con fascia non nulla, riavvio e statistiche.
-2. Migrazione guidata dello **storico Energia in m³**, con backup e veri ID.
-3. **Per ultima**: scrittura delle fasce orarie Cube S, previa verifica
-   dell'endpoint, readback e gestione degli errori. La RC non
-   modifica la programmazione della caldaia.
+- Consolidare il recupero dei cumulativi dopo interruzioni di HA superiori
+  all'orizzonte disponibile dal cloud, senza alterare silenziosamente Energia.
+- In un branch **separato e non destinato alla 1.0.0**, studiare la modifica
+  delle fasce settimanali Cube S. Prima di qualsiasi comando reale occorre
+  verificare endpoint, payload, lettura immediatamente precedente, readback,
+  confronto con la programmazione originale e piano di recupero.
+  Nessuna scrittura delle fasce orarie è presente nella 1.0.0.
 
 ## Sviluppo
 
