@@ -1,6 +1,6 @@
 # Ariston Cube for Home Assistant
 
-**Version 1.0.1 (maintenance branch, unreleased)** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
+**Version 1.0.1** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
 
 Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, read-only Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
 
