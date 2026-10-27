@@ -1,6 +1,6 @@
 # Ariston Cube for Home Assistant
 
-**Version 1.0.0** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
+**Version 1.0.1 (maintenance branch, unreleased)** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
 
 Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, read-only Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
 
@@ -16,7 +16,7 @@ Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW)
 - **Telemetry:** heating request, boiler flame, heating flow and target temperatures, optional outdoor temperature, heating pressure, and other available readings.
 - **Two persistent gas totals:** one for central heating and one for DHW, based on the cloud's physical **standard cubic meter (Smc)** readings.
 - **Read-only weekly schedule:** a sensor, calendar view, and optional Lovelace timeline card.
-- **Optional DHW Lovelace card:** a temperature slider alongside an independent Comfort control.
+- **Native DHW controls:** use the Home Assistant water heater entity and the independent Comfort switch.
 
 ### Home Assistant entities
 
@@ -31,16 +31,16 @@ Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW)
 | `sensor` | Temperatures, pressure, read-only weekly program and two cumulative Smc totals |
 | `calendar` | Read-only Cube S weekly heating schedule |
 
-Version 1.0.0 removes the former daily and two-hour Smc diagnostic sensors and the obsolete DHW number control. The cumulative gas entities retain their existing unique IDs; the cleanup targets only obsolete **Ariston Cube** entity registry entries belonging to the configured installation. It does not delete Recorder history or long-term statistics.
+Version 1.0.0 removed the former daily and two-hour Smc diagnostic sensors and the obsolete DHW number control. The cumulative gas entities retain their existing unique IDs; the cleanup targets only obsolete **Ariston Cube** entity registry entries belonging to the configured installation. It does not delete Recorder history or long-term statistics.
 
 ## Installation with HACS
 
 1. In HACS, add `https://github.com/paolofaz/ha-ariston-cube` as a **custom repository** of type **Integration**, if it is not already installed.
-2. Install or update **Ariston Cube**. Once the GitHub release `v1.0.0` has been published, select that release.
+2. Install or update **Ariston Cube**. For a future 1.0.1 release, select `v1.0.1` once it is published.
 3. Restart Home Assistant and use **Settings → Devices & services** to add or review the Ariston Cube integration.
 4. Select your boiler through the integration's configuration flow.
 
-The source code for version 1.0.0 is on `main`. A **GitHub release/tag `v1.0.0` targeting the 1.0.0 commit on `main`** is required for a normal versioned HACS release. Do not reuse or retarget previous RC tags.
+This maintenance branch is based on stable 1.0.0. **No 1.0.1 release has been published yet; `main` stays on 1.0.0.** Do not retarget the existing stable tag.
 
 **When updating an existing installation, preserve the Ariston Cube config entry, the Home Assistant Recorder database and all integration files under `.storage`.** They include persistent gas-meter checkpoints and historical Energy data. Keep any pre-migration database backup.
 
@@ -76,32 +76,35 @@ Actual stored-water temperature is displayed only if `DhwStorageTemperature` is 
 
 Automations previously using the removed DHW number entity should instead call `water_heater.set_temperature`.
 
-### Optional DHW card
+### Native DHW controls
 
-The bundled `ariston-cube-acs-card` displays the DHW setpoint slider and Comfort switch together. Replace the placeholders with your actual entity IDs from **Developer tools → States**:
+The custom `ariston-cube-acs-card` was retired in the **1.0.1 maintenance branch**.
+Use the native `water_heater` entity and the separate DHW Comfort switch.
+The standard Home Assistant device page may display **"Off"** from the
+read-only cloud `DhwMode`; the underlying DHW setpoint is still configurable.
+We intentionally do not fake an operating mode to suppress that label.
 
-```yaml
-type: custom:ariston-cube-acs-card
-title: Domestic hot water
-entity: water_heater.REPLACE_WITH_YOUR_DHW_ENTITY
-comfort_entity: switch.REPLACE_WITH_YOUR_COMFORT_ENTITY
-```
+**Upgrading from 1.0.0:** remove existing manual `custom:ariston-cube-acs-card`
+cards from your dashboards. If the old ACS script remains registered in
+Settings → Dashboards → Resources, remove that entry manually. Only the
+Cube S weekly card is served and registered in 1.0.1. Existing dashboard
+layouts and resources are not deleted by the integration.
 
-The standard Home Assistant `water_heater` display may show **“Off”** because the read-only `DhwMode` happens to report `off`, even when the temperature target remains adjustable. The integration preserves that real cloud status rather than fabricating another mode. If you prefer a temperature-oriented display, use the optional DHW card or configure a dashboard card explicitly; the automatically generated device controls use Home Assistant's standard presentation.
+### Cube S weekly Lovelace card
 
-### Lovelace resources
+The bundled `ariston-cube-weekly-card` remains available and is currently
+read-only. It can be adapted for verified editing in a future release.
 
-In **Storage** dashboard mode, the integration attempts to register both bundled cards automatically. In **YAML** resource mode, register them yourself:
+In **Storage** dashboard mode, its module resource is registered automatically.
+For manual **YAML** resources, add:
 
 ```yaml
 resources:
-  - url: /ariston_cube/ariston-cube-acs-card.js?v=1.0.0
-    type: module
-  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.0.0
+  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.0.1
     type: module
 ```
 
-If you already registered a resource with an older query-string version, update its version and reload the dashboard. The weekly card remains **read-only**; it displays the actual Cube S Comfort/Economy time bands and does not save changes.
+Update any older resource URL query version and reload your dashboard.
 
 ## Gas consumption and Energy dashboard
 
@@ -138,7 +141,7 @@ Mobile bearer-token authentication cannot be reused as web-portal cookie/CSRF au
 
 ## Scope and roadmap
 
-**Included in 1.0.0:** monitoring, verified heating/DHW controls, persistent gas totals, and reading the real Cube S weekly timetable.
+**Included since 1.0.0:** monitoring, verified heating/DHW controls, persistent gas totals, and reading the real Cube S weekly timetable.
 
 **Not included:** editing or saving Cube S weekly time bands. That work is isolated in the experimental `feat/cube-s-weekly-schedule-editor` branch. Any future write operation requires an independently verified endpoint/payload, a fresh-source comparison, explicit confirmation, a read-back check and a recovery strategy. Experimental code must not be installed as the stable 1.0.0.
 
