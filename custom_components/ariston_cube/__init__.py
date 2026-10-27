@@ -113,6 +113,11 @@ async def async_setup_entry(hass, entry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # HA usually invokes async_setup() before config-entry setup. Keep a
+    # guarded fallback so the experimental actions also appear on upgrades.
+    services = getattr(hass, "services", None)
+    if services is not None and not services.has_service(DOMAIN, _PREVIEW_SERVICE):
+        await async_setup(hass, {})
     try:
         await async_register_weekly_card(hass)
     except Exception as exc:  # noqa: BLE001
