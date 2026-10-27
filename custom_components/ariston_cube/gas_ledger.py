@@ -1,8 +1,9 @@
-"""Restart-safe Ariston Smc accounting across the vendor's 02:00 report reset.
+"""Restart-safe gas Smc accounting using real midnight web-report behavior.
 
-Cloud CurrentDay stays on the *previous* calendar day until 02:00.
-At midnight its last 22:00-00:00 bucket becomes available, before
-the 02:00 00:00-02:00 bucket starts the new CurrentDay.
+At midnight the web report moves all of yesterday's 12 two-hour intervals
+to PreviousDay (including 22:00–00:00), and CurrentDay is reset.
+This behavior was verified against the 2026-10-27 web diagnostic captures;
+it differs from the legacy mobile kWh-derived daily sensor.
 
 Each usage/day/2-hour-slot is stored independently; equal adjacent
 usage amounts are counted separately, while rereads of the same slot
@@ -88,15 +89,14 @@ def _rows(report: Any, now: datetime) -> list[tuple[str, str, int, float]]:
     if not isinstance(histogram, list):
         return []
 
-    # Vendor publication day switches at 02:00, NOT at 00:00.
-    report_day = now.date() - timedelta(days=1) if now.hour < 2 else now.date()
+    # Field-verified: PreviousDay always names the previous calendar day,
+    # even between 00:00 and 02:00; CurrentDay is new from midnight.
     rows: list[tuple[str, str, int, float]] = []
     for period in _PERIODS:
-        day = report_day - timedelta(days=1) if period == "PreviousDay" else report_day
-        # The entire yesterday histogram is completed. CurrentDay contains
-        # 12 completed slots from 00:00-02:00, but only hour//2 thereafter.
-        completed = (12 if (period == "PreviousDay" or now.hour < 2)
-                     else min(12, now.hour // 2))
+        day = (now.date() - timedelta(days=1)
+               if period == "PreviousDay" else now.date())
+        # From 00:00 to 02:00 the new day has NO completed slots.
+        completed = 12 if period == "PreviousDay" else min(12, now.hour // 2)
         for cloud_name, kind in _SERIES.items():
             matching = [
                 item for item in histogram
@@ -184,9 +184,9 @@ def apply_report(
                 state["previous_day_verified"] = True
                 changed = True
 
-        # At 02:00 the last cloud report is irrevocably replaced. If we
-        # cannot close yesterday from the 00:xx snapshot or a PreviousDay
-        # report, stop accounting rather than quietly omitting 22:00-00:00.
+        # The web PreviousDay report normally persists all day. If it is
+        # absent at 02:00 and yesterday is still incomplete, refuse to
+        # claim correct statistics instead of fabricating an empty slot.
         if now.hour >= 2 and state["tracking_start"] is not None:
             previous = state["closed_through"]
             if (date.fromisoformat(state["tracking_start"]) <= yesterday
