@@ -10,6 +10,7 @@ from .model import as_temperature
 from .schedule_coordinator import get_or_create_weekly_coordinator
 from .smc_coordinator import AristonSmcCoordinator
 from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers import entity_registry as er
 from .weekly_program import daily_description
 
 DESCRIPTIONS = (
@@ -73,6 +74,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
         AristonCumulativeGas(smc, "total_heating_smc", "heating_gas_cumulative"),
         AristonCumulativeGas(smc, "total_dhw_smc", "dhw_gas_cumulative"),
     ])
+    # The diagnostic entity was intentionally temporary in 0.8.7/0.8.8.
+    # Remove ONLY that exact registered Cube entity, never Recorder history,
+    # legacy Ariston entities, or the verified raw Smc sensor registry entries.
+    registry = er.async_get(hass)
+    old_unique_id = f"{coordinator.plant_id}_smc_midnight_debug"
+    old_entity_id = registry.async_get_entity_id(
+        "sensor", "ariston_cube", old_unique_id
+    )
+    if old_entity_id:
+        old_entry = registry.async_get(old_entity_id)
+        if old_entry and old_entry.config_entry_id == entry.entry_id:
+            registry.async_remove(old_entity_id)
+
     async_add_entities(entities)
 
     # Ariston publishes its completed two-hour gas buckets on local-clock
