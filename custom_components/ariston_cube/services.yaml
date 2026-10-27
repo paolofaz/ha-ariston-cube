@@ -1,0 +1,27 @@
+preview_weekly_slice:
+  name: Preview Cube S weekly time boundary
+  description: >
+    Experimental developer action. Reads the actual Cube S weekly schedule,
+    moves one existing boundary in a local preview, and returns the before/after
+    times. Does not save or change the boiler schedule.
+  fields:
+    day:
+      required: true
+      name: Day
+      description: "0 Sunday, 1 Monday, 2 Tuesday, 3 Wednesday, 4 Thursday, 5 Friday, 6 Saturday"
+      selector:
+        number:
+          min: 0
+          max: 6
+          step: 1
+          mode: box
+    from_time:
+      required: true
+      name: Existing start time (HH:MM)
+      selector:
+        text:
+    to_time:
+      required: true
+      name: Proposed new start time (HH:MM)
+      selector:
+        text:
