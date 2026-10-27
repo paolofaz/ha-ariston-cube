@@ -128,3 +128,49 @@ def test_no_cloud_write_route_or_service_in_offline_preview():
     assert "await " not in code
     assert "/api/v2/remote/timeProgs" not in code
     assert "async_write" not in code
+
+
+def test_move_one_real_boundary_and_keep_other_weekdays_unchanged():
+    source = sample()
+    original = deepcopy(source)
+    proposal = weekly_preview.preview_one_boundary_move(
+        source, 2, "06:00", "06:15"
+    )
+    assert proposal["kind"] == "offline_preview_only"
+    assert proposal["can_submit"] is False
+    assert proposal["changed"] is True
+    assert proposal["weekday"] == "Martedì"
+    assert any(row["time"] == "06:15" for row in proposal["after"])
+    assert all(row["time"] != "06:00" for row in proposal["after"])
+    assert proposal["days"]["Lunedì"] != proposal["days"]["Martedì"]
+    assert proposal["days"]["Domenica"] == weekly_preview.preview_one_boundary_move(
+        sample(), 2, "06:00", "06:15"
+    )["days"]["Domenica"]
+    assert source == original
+
+
+@pytest.mark.parametrize("day,old,new", [
+    (-1, "06:00", "06:15"),
+    (7, "06:00", "06:15"),
+    (2, "06:00", "06:00"),
+    (2, "05:00", "06:15"),
+    (2, "06:00", "22:00"),
+    (2, "06:00", "26:00"),
+    (2, "06:00", "oops"),
+    (2, "06:00", "23:70"),
+])
+def test_bad_field_test_change_never_produces_a_preview(day, old, new):
+    with pytest.raises(ValueError):
+        weekly_preview.preview_one_boundary_move(sample(), day, old, new)
+
+
+def test_developer_tools_action_exposes_preview_only():
+    code = (ROOT / "__init__.py").read_text(encoding="utf-8")
+    assert 'preview_weekly_slice' in code
+    assert "SupportsResponse.ONLY" in code
+    assert "preview_one_boundary_move" in code
+    assert "async_read_weekly_program" in code
+    assert "async_set_weekly" not in code
+    yaml = (ROOT / "services.yaml").read_text(encoding="utf-8")
+    assert "preview_weekly_slice:" in yaml
+    assert "Does not save or change the boiler schedule." in yaml
