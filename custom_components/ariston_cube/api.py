@@ -347,6 +347,63 @@ class AristonClient:
                 ) from exc
 
 
+    async def async_test_write_weekly_slice(
+        self, plant_id: str, day: int, from_time: str, to_time: str,
+        expected_fingerprint: str,
+    ) -> dict[str, Any]:
+        """One experimental, user-confirmed POST followed by one GET.
+
+        Server OPTIONS advertises POST on the GET endpoint; the JSON shape
+        remains a hypothesis. A failed/ambiguous reply is NEVER retried.
+        """
+        from .weekly_write import build_test_write, confirm_weekly_write
+
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si"
+            # A new source read, not the cached schedule coordinator state.
+            try:
+                before = await self._request("GET", path)
+            except AristonAuthError:
+                self._token = None
+                self._features.clear()
+                await self.async_login()
+                before = await self._request("GET", path)
+            if not isinstance(before, dict):
+                raise AristonResponseError("Invalid Cube S weekly schedule response")
+            try:
+                body, expected, preview = build_test_write(
+                    before, day, from_time, to_time, expected_fingerprint
+                )
+            except ValueError as exc:
+                raise CommandRejected(str(exc)) from exc
+
+            # Exactly ONE POST. Do not try a different JSON wrapper, route
+            # or HTTP method if Ariston rejects the request.
+            reply = await self._request("POST", path, json_body=body)
+            if isinstance(reply, dict) and (
+                reply.get("success") is False or reply.get("ok") is False
+            ):
+                raise AristonResponseError(
+                    "Cloud rejected the experimental schedule write; do not retry"
+                )
+            # Exact weekday comparison; no retry after ambiguous write.
+            after = await self._request("GET", path)
+            if not confirm_weekly_write(after, expected):
+                raise AristonResponseError(
+                    "POST attempted; Cube S schedule NOT CONFIRMED. "
+                    "Check the official app before attempting anything else"
+                )
+            return {
+                "status": "confirmed_by_fresh_cloud_read",
+                "weekday": preview["weekday"],
+                "before": preview["before"],
+                "after": preview["after"],
+                "changed": True,
+            }
+
+
     async def async_read_weekly_program(self, plant_id: str) -> dict[str, Any]:
         """Read the existing Cube S schedule. Never issue a programme write."""
         async with self._lock:
