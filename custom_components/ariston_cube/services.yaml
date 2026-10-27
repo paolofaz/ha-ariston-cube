@@ -25,3 +25,11 @@ preview_weekly_slice:
       name: Proposed new start time (HH:MM)
       selector:
         text:
+
+probe_weekly_methods:
+  name: Probe Cube S weekly API methods
+  description: >
+    Sends one read-only HTTP OPTIONS request to the existing Cube S
+    schedule endpoint. Returns status and advertised method names, if any.
+    It does not write a schedule; a POST/PUT in the response is not
+    proof that its JSON format is known.
