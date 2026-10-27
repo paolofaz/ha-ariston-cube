@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1] / "custom_components/ariston_cube"
 def test_web_card_is_bundled_with_integration():
     card = (ROOT / "www" / "ariston-cube-weekly-card.js").read_text()
     assert 'customElements.define("ariston-cube-weekly-card"' in card
-    assert "hass.callService" not in card
+    assert "callService(" in card
     assert "fetch(" not in card
 
 

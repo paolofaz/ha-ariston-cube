@@ -22,3 +22,9 @@ jobs:
         run: python -m compileall -q custom_components/ariston_cube tests
       - name: Unit tests (offline)
         run: python -m pytest -q
+      - name: Check weekly Lovelace editor JavaScript syntax
+        run: |
+          node --check custom_components/ariston_cube/www/ariston-cube-weekly-card.js
+          node --check frontend/ariston-cube-weekly-card.js
+      - name: Test Lovelace editor interactions (Node)
+        run: node --test tests/test_weekly_editor.mjs
