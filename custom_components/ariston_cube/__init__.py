@@ -89,9 +89,51 @@ async def async_setup(hass, config) -> bool:
         DOMAIN, _PREVIEW_SERVICE, preview,
         schema=schema, supports_response=SupportsResponse.ONLY,
     )
+    async def test_write_weekly(call):
+        """ONLY a user action with a matching preview fingerprint may POST."""
+        from .commands import CommandRejected
+
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry is required")
+        coordinator = entries[0].runtime_data
+        try:
+            result = await coordinator.client.async_test_write_weekly_slice(
+                coordinator.plant_id,
+                call.data["day"], call.data["from_time"],
+                call.data["to_time"], call.data["expected_fingerprint"],
+            )
+        except (AristonError, CommandRejected) as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        weekly = getattr(coordinator, "weekly_coordinator", None)
+        if weekly is not None:
+            try:
+                await weekly.async_refresh()
+            except Exception as exc:  # optional refresh is not a second write
+                _LOGGER.warning(
+                    "Cube S schedule changed, but calendar refresh failed (%s)",
+                    type(exc).__name__,
+                )
+        return result
+
+    write_schema = vol.Schema({
+        vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(min=0, max=6)),
+        vol.Required("from_time"): str,
+        vol.Required("to_time"): str,
+        vol.Required("expected_fingerprint"): vol.Match(r"^[a-f0-9]{64}$"),
+        vol.Required("confirm"): vol.Equal(True),
+    })
+
     hass.services.async_register(
         DOMAIN, "probe_weekly_methods", probe_weekly,
         supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "test_write_weekly_slice", test_write_weekly,
+        schema=write_schema, supports_response=SupportsResponse.ONLY,
     )
     return True
 
@@ -101,7 +143,7 @@ PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform
 
 async def async_setup_entry(hass, entry) -> bool:
     """Use a token-authenticated client and fetch the initial snapshot."""
-    _LOGGER.info("Ariston Cube 1.1.0-rc.1 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
+    _LOGGER.info("Ariston Cube 1.1.0-rc.2 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
     session = async_get_clientsession(hass)
     # Cookie-based R2 login must never share the mobile bearer-token session.
     web_session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
@@ -123,7 +165,7 @@ async def async_setup_entry(hass, entry) -> bool:
     except Exception as exc:  # noqa: BLE001
         # Optional UI must never prevent boiler entity setup.
         _LOGGER.warning("Cube S weekly card could not be registered: %s", type(exc).__name__)
-    _LOGGER.info("Ariston Cube 1.1.0-rc.1 platform setup dispatched")
+    _LOGGER.info("Ariston Cube 1.1.0-rc.2 platform setup dispatched")
     return True
 
 
