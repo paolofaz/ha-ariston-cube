@@ -569,3 +569,27 @@ long-term HA Energy statistics while we establish the cloud behavior.
 The four raw Smc sensors and working ACS Comfort switch are unchanged.
 The legacy Ariston integration, existing Recorder data and main branch
 remain untouched. This is a data-gathering build, not an RC.
+
+## 0.8.8 — correction based on actual 26–27 Oct overnight Smc report
+
+Real night diagnostic captures, 26 Oct 22:40 to 27 Oct 04:40, prove
+that physical-unit R2 web reports roll over at MIDNIGHT, unlike the
+legacy mobile kWh-derived daily total that appears to roll at 02:00.
+At 26 Oct 22:40 CurrentDay heating=4.22 and DHW=0.55 Smc.
+At 27 Oct 00:10 PreviousDay heating=4.62, DHW=0.85 Smc
+(22–00 final interval 0.40 heating and 0.30 DHW), while
+CurrentDay has already reset to zero. At 02:10 CurrentDay remains
+zero and PreviousDay retains the unchanged 22–00 values.
+
+The physical Smc today sensors now use ONLY completed slots from
+CurrentDay, starting at the actual midnight reset. From 00:00-02:00
+the last-completed 2h bucket is read from PreviousDay slot 11
+and explicitly labelled with yesterday's date. After 02:00
+the previous final bucket is NOT replayed as today's new usage.
+The ledger's day/usage/bucket keys have been corrected accordingly,
+and automated tests use the exact Heating and DHW night readings.
+
+NOTE: cumulative HA Energy gas entities remain DISABLED while
+we complete validation and plan the old statistics migration.
+Existing raw Smc sensors, ACS Comfort and schedule are untouched.
+No automatic Recorder edits, changes to legacy IDs or main merge.
