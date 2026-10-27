@@ -593,3 +593,51 @@ NOTE: cumulative HA Energy gas entities remain DISABLED while
 we complete validation and plan the old statistics migration.
 Existing raw Smc sensors, ACS Comfort and schedule are untouched.
 No automatic Recorder edits, changes to legacy IDs or main merge.
+
+## 0.8.9 — two persistent standardized Smc gas meters
+
+Following live validation of the four period Smc sensors and the real
+2026-10-26/27 midnight `CurrentDay`→`PreviousDay` transition, this
+release activates the two previously experimental cumulative counters:
+
+- Gas riscaldamento cumulativo (Smc)
+- Gas ACS cumulativo (Smc)
+
+Both read `asPhysicalUnit.histogramData`, use a small Home Assistant
+persistent storage checkpoint and count each actual calendar-day + usage
++ 2h slot once, regardless of the amount's equality to another slot.
+On rereads/restarts the same slot is not counted again. Corrections
+to a known slot apply only the difference, including downward corrections.
+The HA gas entities use device_class GAS, state_class TOTAL without
+last_reset, and canonical m³ units. Their numeric quantities are the
+cloud's standard cubic metres (Smc), NOT estimates converted from kWh.
+Initial readings serve as the baseline for newly created HA statistics,
+so do not interpret these counters as a certified boiler lifetime meter.
+
+**Safety**: a brand-new storage namespace and new unique IDs
+`gas_meter_v1_total_heating_smc` and `gas_meter_v1_total_dhw_smc` prevent
+incorrect prototype meter checkpoints and possible 0.8.5/0.8.6
+experimental statistic IDs from being imported. Missing a required
+previous-day bucket, invalid storage data or a long internet outage
+makes the cumulative entities unavailable rather than fabricating gas.
+Values are stored before publishing a changed entity state.
+
+The four existing raw Smc period sensors are unchanged, including
+their two convenient DAILY sensors. The temporary overnight diagnostic
+entity is no longer instantiated, and ONLY its exact registry entry
+belonging to this config entry is removed on setup. Historical Recorder
+data are not deleted; the internal diagnostic .storage file is preserved
+but no longer written. ACS Comfort remains at 15-minute polling.
+
+**No historical statistics migration is performed**. Legacy kWh
+statistics and new m³-at-standard-conditions statistics have different
+units and distinct statistic IDs. The old Ariston integration is kept
+installed pending explicit inspection of its historical entity/statistic
+IDs and a verified cutover plan. The main branch stays untouched;
+this is still pre-RC field validation.
+
+After installation, verify the two cumulative sensor states, their
+m³ / gas / total attributes, and Home Assistant Settings > Developer
+tools > Statistics for errors. Do not add the two sensors to Energy
+until a few consecutive 2h updates and a restart have been compared
+with the direct Smc period values.
