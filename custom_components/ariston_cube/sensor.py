@@ -194,8 +194,16 @@ class AristonPhysicalGas(AristonEntity, SensorEntity):
         data = self.coordinator.data
         if not data:
             return {}
-        attributes = {"giorno_riferimento": data.get("reported_date")}
-        if self._source_key.endswith("_2h_smc"):
+        # A midnight 22:00–00:00 report belongs to YESTERDAY even
+        # though the CurrentDay daily total is already for today.
+        is_2h = self._source_key.endswith("_2h")
+        attributes = {
+            "giorno_riferimento": (
+                data.get("completed_interval_date") if is_2h
+                else data.get("reported_date")
+            )
+        }
+        if is_2h:
             attributes["fascia_completata"] = data.get("completed_interval")
         return attributes
 
