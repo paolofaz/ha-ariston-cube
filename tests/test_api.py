@@ -16,10 +16,11 @@ api = importlib.import_module(f"{PACKAGE}.api")
 
 
 class Response:
-    def __init__(self, payload=None, status=200, path="/api/v2/remote/dataItems"):
+    def __init__(self, payload=None, status=200, path="/api/v2/remote/dataItems", headers=None):
         self.payload = payload
         self.status = status
         self.url = types.SimpleNamespace(path=path)
+        self.headers = headers or {}
 
     async def __aenter__(self):
         return self
@@ -501,3 +502,45 @@ def test_recent_gas_uses_cloud_two_hour_report_once():
     assert reads[0][1].endswith(
         "/reports/GW123/consSequencesApi8?usages=Ch%2CDhw&hasSlp=False"
     )
+
+
+def test_weekly_options_probe_is_read_only_and_exposes_no_credentials():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}, path="/api/v2/accounts/login"),
+        Response(status=204, headers={
+            "Allow": "GET, OPTIONS, POST",
+            "Set-Cookie": "PRIVATE_SECRET",
+        }),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_probe_weekly_methods("GW123")
+        assert result["http_status"] == 204
+        assert result["declared_methods"] == ["GET", "OPTIONS", "POST"]
+        assert result["conclusive"] is False
+        assert "PRIVATE_SECRET" not in repr(result)
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "OPTIONS"]
+    assert session.calls[1][1].endswith(
+        "/timeProgs/GW123/ChZn1?umsys=si"
+    )
+    assert "json" not in session.calls[1][2]
+
+
+def test_weekly_options_probe_405_is_not_assumed_to_support_writes():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response(status=405),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_probe_weekly_methods("GW123")
+        assert result["http_status"] == 405
+        assert result["declared_methods"] == []
+        assert result["conclusive"] is False
+
+    run(scenario())
+    assert session.calls[1][0] == "OPTIONS"
