@@ -25,7 +25,9 @@ def test_smc_local_bihourly_refresh_is_unloaded_with_config_entry():
     assert "smc.async_refresh()" in sensor
     assert "gas.async_refresh()" not in sensor
     assert "AristonRecentGas" not in sensor
-    assert "AristonPhysicalGas" in sensor
+    assert "AristonPhysicalGas" not in sensor
+    assert 'AristonCumulativeGas(smc, "total_heating_smc"' in sensor
+    assert 'AristonCumulativeGas(smc, "total_dhw_smc"' in sensor
 
 
 def test_smc_interval_is_fallback_not_main_schedule():
@@ -44,4 +46,6 @@ def test_no_kwh_gas_sensors_in_translations():
         for key in ("heating_smc_today", "dhw_smc_today"):
             assert key not in data["entity"]["sensor"]
         for key in ("heating_smc_2h", "dhw_smc_2h"):
+            assert key not in data["entity"]["sensor"]
+        for key in ("heating_gas_cumulative", "dhw_gas_cumulative"):
             assert key in data["entity"]["sensor"]

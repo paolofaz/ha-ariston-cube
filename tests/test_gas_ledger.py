@@ -296,5 +296,8 @@ def test_dashboard_meters_have_fresh_unique_ids_and_not_original_debug_entity():
     assert 'super().__init__(coordinator, "gas_meter_v1_" + source_key)' in source
     assert "AristonSmcOvernightDebug(smc)" not in setup
     assert "old_entry.config_entry_id == entry.entry_id" in setup
+    assert 'AristonPhysicalGas(smc,' not in setup
+    assert '"web_smc_heating_smc_2h"' in setup
+    assert '"web_smc_dhw_smc_2h"' in setup
     assert '"sensor", "ariston_cube", unique_id' in setup
     assert "registry.async_remove(old_entity_id)" in setup

@@ -113,10 +113,11 @@ def test_no_fabricated_zero_from_missing_or_bad_series():
     assert smc.parse_smc_report(broken, NOW)["heating_smc_2h"] is None
 
 
-def test_smc_entities_not_misrepresented_as_lifetime_gas_meter():
+def test_only_persistent_smc_totals_are_exposed_as_gas_entities():
     source = (ROOT / "sensor.py").read_text()
-    cls = source.split("class AristonPhysicalGas", 1)[1].split("class AristonCumulativeGas", 1)[0]
-    assert '_attr_native_unit_of_measurement = "Smc"' in cls
-    assert "_attr_state_class" not in cls
-    assert "_attr_device_class" not in cls
+    assert "class AristonPhysicalGas" not in source
+    assert "class AristonCumulativeGas" in source
     assert "AristonSmcCoordinator" in source
+    assert '"web_smc_heating_smc_2h"' in source  # registry cleanup only
+    assert '"web_smc_dhw_smc_2h"' in source
+    assert '"gas_meter_v1_" + source_key' in source

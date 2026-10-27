@@ -67,19 +67,20 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities.append(AristonWeeklySchedule(schedule))
     smc = AristonSmcCoordinator(hass, coordinator, entry_id=entry.entry_id)
     entities.extend([
-        AristonPhysicalGas(smc, "heating_smc_2h", "heating_smc_2h"),
-        AristonPhysicalGas(smc, "dhw_smc_2h", "dhw_smc_2h"),
         AristonCumulativeGas(smc, "total_heating_smc", "heating_gas_cumulative"),
         AristonCumulativeGas(smc, "total_dhw_smc", "dhw_gas_cumulative"),
     ])
-    # The diagnostic entity was intentionally temporary in 0.8.7/0.8.8.
-    # Remove ONLY that exact registered Cube entity, never Recorder history,
-    # legacy Ariston entities, or the verified raw Smc sensor registry entries.
+    # Remove only obsolete Ariston Cube registry entries belonging to this
+    # config entry. The two raw two-hour entities are no longer exposed;
+    # gas_ledger continues to ingest the same two-hour cloud buckets.
+    # This never purges Recorder/statistics or touches legacy integration IDs.
     registry = er.async_get(hass)
     for suffix in (
         "smc_midnight_debug",
         "web_smc_heating_smc_today",
         "web_smc_dhw_smc_today",
+        "web_smc_heating_smc_2h",
+        "web_smc_dhw_smc_2h",
     ):
         unique_id = f"{coordinator.plant_id}_{suffix}"
         old_entity_id = registry.async_get_entity_id(
@@ -184,47 +185,6 @@ class AristonWeeklySchedule(AristonEntity, SensorEntity):
         return super().available and self.native_value is not None
 
 
-
-
-class AristonPhysicalGas(AristonEntity, SensorEntity):
-    """Raw physical Smc by period, not a running meter."""
-
-    _attr_native_unit_of_measurement = "Smc"
-    _attr_icon = "mdi:meter-gas"
-    # Standard m³ is not interchangeable with uncorrected m³.
-    # No GAS device_class or cumulative state class is advertised.
-
-    def __init__(self, coordinator, source_key: str, translation_key: str):
-        super().__init__(coordinator, "web_smc_" + source_key)
-        self._source_key = source_key
-        self._attr_translation_key = translation_key
-
-    @property
-    def native_value(self) -> float | None:
-        data = self.coordinator.data
-        return data.get(self._source_key) if data else None
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        data = self.coordinator.data
-        if not data:
-            return {}
-        # A midnight 22:00–00:00 report belongs to YESTERDAY even
-        # though the CurrentDay daily total is already for today.
-        is_2h = self._source_key.endswith("_2h")
-        attributes = {
-            "giorno_riferimento": (
-                data.get("completed_interval_date") if is_2h
-                else data.get("reported_date")
-            )
-        }
-        if is_2h:
-            attributes["fascia_completata"] = data.get("completed_interval")
-        return attributes
-
-    @property
-    def available(self) -> bool:
-        return super().available and self.native_value is not None
 
 
 

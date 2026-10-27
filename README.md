@@ -23,13 +23,13 @@ ariston.** Conserva i file .storage.
 | number | Preset Comfort ed Economy del riscaldamento |
 | select | Modalità caldaia |
 | binary_sensor | Richiesta riscaldamento e fiamma |
-| sensor | Temperature, pressione, programma settimanale e **due cumulativi Smc più due ultime fasce biorarie Smc** |
+| sensor | Temperature, pressione, programma settimanale e **due cumulativi Smc** |
 | calendar | Programma settimanale Cube S in **sola lettura** |
 
-Rimossi: i due **sensori gas giornalieri Smc**, il vecchio **number
-ACS**, il sensore di debug notturno. Solo le loro voci nel registro
-entità Ariston Cube vengono rimosse in modo mirato; nessun dato Recorder
-viene cancellato. Il sensore storico di sola lettura DhwTemp rimane
+Rimossi: i due **sensori gas giornalieri Smc**, i due sensori delle
+**fasce biorarie Smc**, il vecchio **number ACS** e il sensore di
+debug notturno. Solo le loro voci nel registro entità Ariston Cube
+vengono rimosse in modo mirato; nessun dato Recorder viene cancellato. Il sensore storico di sola lettura DhwTemp rimane
 per retrocompatibilità con dashboard e automazioni.
 
 ## ACS: water_heater con solo controllo temperatura
@@ -74,6 +74,31 @@ resources:
     type: module
 ~~~
 
+### Nascondere «Spento» senza falsificare lo stato ACS
+
+Home Assistant visualizza lo stato `current_operation` del dominio
+`water_heater`. Il dato `DhwMode` può essere `off` e viene tradotto
+come «Spento», anche se il setpoint è configurabile. Non falsifichiamo
+questo dato cloud e non aggiungiamo modalità fittizie solo per la UI.
+
+Se in una **dashboard modificabile** interessa mostrare soltanto
+la temperatura impostata, utilizzare una scheda Tile:
+
+~~~yaml
+type: tile
+entity: water_heater.SOSTITUISCI_CON_ID_REALE
+name: Acqua calda sanitaria
+state_content: temperature
+features:
+  - type: target-temperature
+~~~
+
+In alternativa, la scheda `custom:ariston-cube-acs-card` già inclusa
+mostra il valore e il cursore con il controllo Comfort separato,
+senza riportare «Spento». La schermata «Controlli» generata
+automaticamente nella pagina del dispositivo usa il rendering standard
+di Home Assistant e non è personalizzabile da questa integrazione.
+
 La scheda ariston-cube-weekly-card rimane una timeline **sola lettura**.
 Se la risorsa era già registrata con un vecchio numero di versione,
 aggiorna la query della risorsa e ricarica la dashboard.
@@ -97,9 +122,10 @@ PreviousDay contiene anche la fascia finale 22–00.
 Questo differisce dal vecchio giornaliero kWh calcolato da un'altra API.
 
 Refresh Smc programmato alle **:10 e :40 di ogni ora pari**,
-più lettura iniziale e fallback a sei ore. I due sensori delle
-ultime fasce biorarie rimangono utili per controllare i cumulativi.
-Il giornaliero potrà essere consultato dalle statistiche Energia.
+più lettura iniziale e fallback a sei ore. La rimozione dei sensori
+biorari riguarda solo le entità: il registro persistente continua a
+utilizzare le 12 fasce del report web per comporre i cumulativi.
+Il giornaliero può essere consultato dalle statistiche Energia.
 
 In caso di schema cloud non valido, discontinuità o perdita di
 checkpoint il cumulativo può risultare unavailable anziché
@@ -108,18 +134,18 @@ valutare le conseguenze.** I test verificano riavvii, correzioni,
 fasce uguali e rollover, ma resta da verificare un incremento
 live positivo della RC.
 
-## Storico m³ da migrare in una fase separata
+## Continuità dello storico Energia
 
-**Le vecchie statistiche Energia sono già in m³:** i vecchi sensori
-erano stati convertiti dall'utente PRIMA di collegarli a Energia.
-La nuova integrazione riceve direttamente Smc da Ariston.
-Prima di unire le serie bisogna verificare i due vecchi
-statistic_id, ultimo stato, unità, somma e continuità di lettura,
-poi fare backup e decidere il passaggio senza salti o duplicazioni.
-
-**Questa RC non modifica Recorder, statistics_meta, la dashboard
-Energia né gli ID dei cumulativi della 0.8.9.**
-Non disinstallare ancora la vecchia integrazione.
+Le vecchie statistiche Energia erano **già in m³**, derivate da una
+conversione dei consumi kWh nella precedente installazione.
+L'installazione di riferimento ha migrato manualmente lo storico SQLite
+sugli statistic_id dei due cumulativi Ariston Cube dopo backup e
+verifica dei raccordi. **Questa integrazione non esegue migrazioni DB**
+e non modifica `statistics_meta`, Recorder o la dashboard Energia.
+Non ripetere la migrazione SQL su un impianto già migrato.
+Conservare il backup pre-migrazione fino alla conferma dei consumi
+successivi. Prima di rimuovere la vecchia integrazione verificare
+che nessuna automazione, template o dashboard usi entità obsolete.
 
 ## Due sessioni, stesse credenziali
 

@@ -53,12 +53,6 @@
       "heating_pressure": {
         "name": "Pressione circuito riscaldamento"
       },
-      "heating_smc_2h": {
-        "name": "Gas riscaldamento fascia conclusa Smc"
-      },
-      "dhw_smc_2h": {
-        "name": "Gas ACS fascia conclusa Smc"
-      },
       "heating_gas_cumulative": {
         "name": "Gas riscaldamento cumulativo (Smc)"
       },

@@ -53,12 +53,6 @@
       "heating_pressure": {
         "name": "Heating circuit pressure"
       },
-      "heating_smc_2h": {
-        "name": "Heating gas last completed 2h Smc"
-      },
-      "dhw_smc_2h": {
-        "name": "Hot water gas last completed 2h Smc"
-      },
       "heating_gas_cumulative": {
         "name": "Heating gas cumulative, standard cubic meters"
       },
