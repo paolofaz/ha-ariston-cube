@@ -108,7 +108,7 @@
       const minimum = number(attrs.min_temp, 36);
       const maximum = number(attrs.max_temp, 60);
       const actual = number(attrs.temperature, NaN);
-      const good = heater && !["unknown", "unavailable"].includes(heater.state) &&
+      const good = heater && heater.state !== "unavailable" &&
         Number.isFinite(actual) && minimum < maximum;
       const wrapper = node("ha-card");
       const style = node("style");
