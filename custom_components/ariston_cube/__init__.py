@@ -20,7 +20,7 @@ PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform
 
 async def async_setup_entry(hass, entry) -> bool:
     """Use a token-authenticated client and fetch the initial snapshot."""
-    _LOGGER.info("Ariston Cube 0.8.9 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
+    _LOGGER.info("Ariston Cube 0.9.0-rc.1 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
     session = async_get_clientsession(hass)
     # Cookie-based R2 login must never share the mobile bearer-token session.
     web_session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
@@ -37,7 +37,7 @@ async def async_setup_entry(hass, entry) -> bool:
     except Exception as exc:  # noqa: BLE001
         # Optional UI must never prevent boiler entity setup.
         _LOGGER.warning("Cube S weekly card could not be registered: %s", type(exc).__name__)
-    _LOGGER.info("Ariston Cube 0.8.9 platform setup dispatched")
+    _LOGGER.info("Ariston Cube 0.9.0-rc.1 platform setup dispatched")
     return True
 
 
