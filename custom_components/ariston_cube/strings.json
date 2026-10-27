@@ -84,6 +84,9 @@
     "select": {
       "plant_mode": {
         "name": "Boiler mode"
+      },
+      "zone_program_mode": {
+        "name": "Heating programme mode"
       }
     },
     "switch": {

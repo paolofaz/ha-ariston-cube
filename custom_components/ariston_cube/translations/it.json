@@ -84,6 +84,9 @@
     "select": {
       "plant_mode": {
         "name": "Modalità caldaia"
+      },
+      "zone_program_mode": {
+        "name": "Modalità riscaldamento"
       }
     },
     "switch": {

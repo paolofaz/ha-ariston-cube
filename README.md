@@ -26,7 +26,7 @@ ariston.** Conserva i file .storage.
 | water_heater | **Solo setpoint ACS**, 36–60 °C, passi di 1 °C |
 | switch | Comfort ACS separato; termoregolazione automatica |
 | number | Preset Comfort ed Economy del riscaldamento |
-| select | Modalità caldaia |
+| select | Modalità caldaia (estate/inverno/spenta) e modalità riscaldamento Cube S (AUTO/Manuale) |
 | binary_sensor | Richiesta riscaldamento e fiamma |
 | sensor | Temperature, pressione, programma settimanale e **due cumulativi Smc** |
 | calendar | Programma settimanale Cube S in **sola lettura** |
@@ -151,6 +151,24 @@ Non ripetere la migrazione SQL su un impianto già migrato.
 Conservare il backup pre-migrazione fino alla conferma dei consumi
 successivi. Prima di rimuovere la vecchia integrazione verificare
 che nessuna automazione, template o dashboard usi entità obsolete.
+
+## Modalità riscaldamento e sensore fiamma
+
+Il selettore **Modalità riscaldamento** usa lo stesso `ZoneMode` del
+`climate` Cube S: AUTO=3 (programma settimanale esistente) e Manuale=2.
+Il cambio di opzione chiama lo stesso comando verificato, con lettura fresca
+e readback. Le due entità restano sincronizzate senza comandi automatici
+aggiuntivi. La selezione è indisponibile con impianto in estate/off, zona
+spenta/Economy o se il cloud non dichiara entrambe le opzioni.
+La modalità globale estate/inverno resta nel selettore **Modalità caldaia**.
+Nessuna scrittura della programmazione settimanale è introdotta.
+
+Il sensore **Fiamma** legge `IsFlameOn` a livello impianto (zona 0),
+quindi rileva il bruciatore generale e **non distingue ACS da riscaldamento**.
+Il sensore `ZoneHeatRequest` è invece riferito alla zona 1:
+`climate.hvac_action = heating` richiede sia la richiesta zona sia
+la fiamma, ma non costituisce una misura indipendente della ripartizione
+della fiamma. Non viene creato un sensore ACS dedotto da questi soli segnali.
 
 ## Due sessioni, stesse credenziali
 
