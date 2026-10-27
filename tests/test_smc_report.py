@@ -48,18 +48,54 @@ def test_reads_real_smc_not_as_kwh():
     assert data["heating_smc_today"] != 99999.0
 
 
-def test_midnight_reports_yesterdays_last_22_to_00_bucket():
-    # The vendor's CurrentDay rolls over at 02:00, NOT midnight.
-    result = smc.parse_smc_report(report(), NOW.replace(day=27, hour=0))
-    assert result["reported_date"] == "2026-10-26"
+def test_observed_web_midnight_reset_uses_previousday_not_currentday():
+    # Field diagnostic 2026-10-26 at 22:40 and 2026-10-27 at 00:10/02:10.
+    from copy import deepcopy
+    before = report(
+        heating=[0, 0, 0, 1.3, 1.24, 0.08, 0.5, 0, 0.4, 0.3, 0.4, 0],
+        dhw=[0, 0, 0, 0.2, 0.01, 0.01, 0.2, 0, 0.09, 0.03, 0.01, 0],
+    )
+    last = smc.parse_smc_report(before, NOW.replace(hour=22, minute=40))
+    assert last["heating_smc_today"] == 4.22
+    assert last["dhw_smc_today"] == 0.55
+
+    midnight = report(heating=[0] * 12, dhw=[0] * 12)
+    previous = {
+        "Heating": [0, 0, 0, 1.3, 1.24, 0.08, 0.5, 0, 0.4, 0.3, 0.4, 0.4],
+        "Dhw": [0, 0, 0, 0.2, 0.01, 0.01, 0.2, 0, 0.09, 0.03, 0.01, 0.3],
+    }
+    rows = midnight["asPhysicalUnit"]["histogramData"]
+    for kind, values in previous.items():
+        rows.append({
+            "period": "PreviousDay", "series": kind,
+            "items": [{"x": i, "y": v} for i, v in enumerate(values)],
+        })
+    when = NOW.replace(day=27, hour=0, minute=10)
+    result = smc.parse_smc_report(midnight, when)
+    assert result["reported_date"] == "2026-10-27"
+    assert result["completed_interval_date"] == "2026-10-26"
     assert result["completed_interval"] == "22:00–00:00"
-    assert result["heating_smc_today"] == 66.0
-    assert result["heating_smc_2h"] == 11.0
-    # At 02:00 CurrentDay begins the new calendar-day accumulation.
-    after = smc.parse_smc_report(report(), NOW.replace(day=27, hour=2))
-    assert after["reported_date"] == "2026-10-27"
-    assert after["completed_interval"] == "00:00–02:00"
-    assert after["heating_smc_today"] == 0.0
+    assert result["heating_smc_today"] == 0
+    assert result["dhw_smc_today"] == 0
+    assert result["heating_smc_2h"] == 0.4
+    assert result["dhw_smc_2h"] == 0.3
+
+    again = smc.parse_smc_report(midnight, when.replace(hour=2))
+    assert again["completed_interval_date"] == "2026-10-27"
+    assert again["completed_interval"] == "00:00–02:00"
+    assert again["heating_smc_2h"] == 0
+    assert again["dhw_smc_2h"] == 0
+    assert again["heating_smc_today"] == 0
+
+
+def test_missing_previous_day_does_not_fabricate_midnight_last_bucket():
+    data = smc.parse_smc_report(
+        report(heating=[0] * 12, dhw=[0] * 12),
+        NOW.replace(day=27, hour=0),
+    )
+    assert data["heating_smc_2h"] is None
+    assert data["dhw_smc_2h"] is None
+    assert data["heating_smc_today"] == 0
 
 
 def test_no_fabricated_zero_from_missing_or_bad_series():
