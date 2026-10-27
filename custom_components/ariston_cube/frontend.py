@@ -13,7 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).parent / "www"
 _CARD_PATH = "/ariston_cube/ariston-cube-weekly-card.js"
-_CARD_RESOURCE = _CARD_PATH + "?v=1.1.0-rc.2"
+_CARD_RESOURCE = _CARD_PATH + "?v=1.1.0-rc.3"
 _FLAG = "ariston_cube_frontend_registered"
 
 
@@ -39,14 +39,23 @@ async def async_register_weekly_card(hass) -> None:
             return
         resources = lovelace.resources
         await resources.async_get_info()
-        existing = {
-            item.get("url", "").split("?")[0]
-            for item in resources.async_items()
-        }
-        if _CARD_PATH not in existing:
+        # Reuse an existing resource instead of creating a duplicate.
+        # Updating its query version busts the browser's cached read-only JS.
+        existing = next(
+            (
+                item for item in resources.async_items()
+                if item.get("url", "").split("?")[0] == _CARD_PATH
+            ),
+            None,
+        )
+        if existing is None:
             await resources.async_create_item({
                 "res_type": "module", "url": _CARD_RESOURCE
             })
+        elif existing.get("url") != _CARD_RESOURCE:
+            await resources.async_update_item(
+                existing["id"], {"res_type": "module", "url": _CARD_RESOURCE}
+            )
         _LOGGER.info("Ariston Cube weekly Lovelace card resource available")
     except (ImportError, AttributeError, RuntimeError, ValueError) as exc:
         _LOGGER.warning(
