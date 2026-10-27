@@ -5,15 +5,9 @@ from __future__ import annotations
 import logging
 
 import aiohttp
-import voluptuous as vol
-
-from homeassistant.core import SupportsResponse
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.config_entries import ConfigEntryState
 
 from .const import DOMAIN
 from .weekly_preview import preview_one_boundary_move
-from .api import AristonError
 
 from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession, async_create_clientsession
@@ -26,15 +20,23 @@ _LOGGER = logging.getLogger(__name__)
 
 
 _PREVIEW_SERVICE = "preview_weekly_slice"
-_PREVIEW_SCHEMA = vol.Schema({
-    vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(min=0, max=6)),
-    vol.Required("from_time"): str,
-    vol.Required("to_time"): str,
-})
 
 
 async def async_setup(hass, config) -> bool:
     """Register an offline-change preview using one fresh cloud GET."""
+    import voluptuous as vol
+
+    from homeassistant.core import SupportsResponse
+    from homeassistant.exceptions import HomeAssistantError
+    from homeassistant.config_entries import ConfigEntryState
+
+    from .api import AristonError
+
+    schema = vol.Schema({
+        vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(min=0, max=6)),
+        vol.Required("from_time"): str,
+        vol.Required("to_time"): str,
+    })
 
     async def preview(call):
         entries = [
@@ -69,7 +71,7 @@ async def async_setup(hass, config) -> bool:
 
     hass.services.async_register(
         DOMAIN, _PREVIEW_SERVICE, preview,
-        schema=_PREVIEW_SCHEMA, supports_response=SupportsResponse.ONLY,
+        schema=schema, supports_response=SupportsResponse.ONLY,
     )
     return True
 
