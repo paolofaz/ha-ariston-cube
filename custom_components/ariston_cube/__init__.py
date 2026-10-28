@@ -9,6 +9,7 @@ import aiohttp
 from .const import DOMAIN
 from .weekly_preview import preview_one_boundary_move
 from .weekly_changes import preview_weekly_change
+from .weekly_clone import preview_clone_weekly_days
 
 from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession, async_create_clientsession
@@ -215,6 +216,79 @@ async def async_setup(hass, config) -> bool:
         DOMAIN, "write_weekly_change", write_change,
         schema=vol.Schema({
             **change_schema,
+            vol.Required("expected_fingerprint"): vol.Match(r"^[a-f0-9]{64}$"),
+            vol.Required("confirm"): vol.Equal(True),
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def clone_preview(call):
+        """Read-only preview for copying one source to several weekdays."""
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry is required")
+        coordinator = entries[0].runtime_data
+        try:
+            source = await coordinator.client.async_read_weekly_program(
+                coordinator.plant_id
+            )
+            return preview_clone_weekly_days(
+                source, call.data["source_day"], call.data["destinations"]
+            )
+        except (AristonError, ValueError) as exc:
+            raise HomeAssistantError(str(exc)) from exc
+
+    async def clone_write(call):
+        """Explicitly approved ONE POST to update all selected weekdays."""
+        from .commands import CommandRejected
+
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry is required")
+        coordinator = entries[0].runtime_data
+        try:
+            result = await coordinator.client.async_clone_weekly_days(
+                coordinator.plant_id, call.data["source_day"],
+                call.data["destinations"], call.data["expected_fingerprint"],
+            )
+        except CommandRejected as exc:
+            raise HomeAssistantError("Nessuna modifica inviata: " + str(exc)) from exc
+        except AristonError as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        weekly = getattr(coordinator, "weekly_coordinator", None)
+        if weekly is not None:
+            try:
+                await weekly.async_refresh()
+            except Exception as exc:
+                _LOGGER.warning(
+                    "Cube S cloned week but calendar refresh failed (%s)",
+                    type(exc).__name__,
+                )
+        return result
+
+    clone_fields = {
+        vol.Required("source_day"): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=6)
+        ),
+        vol.Required("destinations"): [
+            vol.All(vol.Coerce(int), vol.Range(min=0, max=6))
+        ],
+    }
+    hass.services.async_register(
+        DOMAIN, "preview_weekly_clone", clone_preview,
+        schema=vol.Schema(clone_fields),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "clone_weekly_days", clone_write,
+        schema=vol.Schema({
+            **clone_fields,
             vol.Required("expected_fingerprint"): vol.Match(r"^[a-f0-9]{64}$"),
             vol.Required("confirm"): vol.Equal(True),
         }),
