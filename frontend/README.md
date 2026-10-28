@@ -36,12 +36,22 @@ con quello reale del sensore settimanale):
 
 ```yaml
 type: custom:ariston-cube-weekly-card
-entity: sensor.TUO_SENSORE_SETTIMANALE
+entity: sensor.SOSTITUISCI_CON_IL_TUO_ID_REALE
 title: Programma riscaldamento Cube S
 ```
 
 Se visualizzi una vecchia versione, aggiorna l'URL della risorsa e
 svuota la cache del browser.
+
+## Alternativa: JavaScript copiato manualmente
+
+Se non usi la risorsa servita dall'integrazione, puoi copiare
+`frontend/ariston-cube-weekly-card.js` nella cartella
+`<config>/www/ariston-cube-weekly-card.js` di Home Assistant.
+In questo caso registra la risorsa **/local/ariston-cube-weekly-card.js**
+come modulo nella dashboard e assicurati di tenerne aggiornato
+il contenuto dopo gli upgrade. Il caricamento automatico
+`/ariston_cube/...` resta l'opzione raccomandata.
 
 ## Azioni sottostanti
 
