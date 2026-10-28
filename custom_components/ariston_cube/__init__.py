@@ -8,6 +8,7 @@ import aiohttp
 
 from .const import DOMAIN
 from .weekly_preview import preview_one_boundary_move
+from .weekly_changes import preview_weekly_change
 
 from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession, async_create_clientsession
@@ -127,6 +128,92 @@ async def async_setup(hass, config) -> bool:
         vol.Required("confirm"): vol.Equal(True),
     })
 
+    async def preview_change(call):
+        """Fresh cloud GET and read-only before/after for one weekly edit."""
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry is required")
+        coordinator = entries[0].runtime_data
+        try:
+            source = await coordinator.client.async_read_weekly_program(
+                coordinator.plant_id
+            )
+            proposal = preview_weekly_change(
+                source, call.data["day"], call.data["operation"],
+                from_time=call.data.get("from_time", ""),
+                to_time=call.data.get("to_time", ""),
+                preset=call.data.get("preset", ""),
+            )
+        except (AristonError, ValueError) as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        return {
+            "status": "preview_only_no_cloud_write",
+            "weekday": proposal["weekday"],
+            "operation": proposal["operation"],
+            "before": proposal["before"],
+            "after": proposal["after"],
+            "changed": proposal["changed"],
+            "source_fingerprint": proposal["source_fingerprint"],
+            "can_submit": False,
+        }
+
+    async def write_change(call):
+        """One user-triggered POST after fresh fingerprint validation."""
+        from .commands import CommandRejected
+
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry is required")
+        coordinator = entries[0].runtime_data
+        try:
+            result = await coordinator.client.async_write_weekly_change(
+                coordinator.plant_id, call.data["day"], call.data["operation"],
+                from_time=call.data.get("from_time", ""),
+                to_time=call.data.get("to_time", ""),
+                preset=call.data.get("preset", ""),
+                expected_fingerprint=call.data["expected_fingerprint"],
+            )
+        except (AristonError, CommandRejected) as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        weekly = getattr(coordinator, "weekly_coordinator", None)
+        if weekly is not None:
+            try:
+                await weekly.async_refresh()
+            except Exception as exc:
+                _LOGGER.warning(
+                    "Cube S schedule written; calendar refresh failed (%s)",
+                    type(exc).__name__,
+                )
+        return result
+
+    change_schema = {
+        vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(min=0, max=6)),
+        vol.Required("operation"): vol.In(("move", "add", "remove")),
+        vol.Optional("from_time", default=""): str,
+        vol.Optional("to_time", default=""): str,
+        vol.Optional("preset", default=""): vol.In(("", "Comfort", "Economy")),
+    }
+    hass.services.async_register(
+        DOMAIN, "preview_weekly_change", preview_change,
+        schema=vol.Schema(change_schema),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "write_weekly_change", write_change,
+        schema=vol.Schema({
+            **change_schema,
+            vol.Required("expected_fingerprint"): vol.Match(r"^[a-f0-9]{64}$"),
+            vol.Required("confirm"): vol.Equal(True),
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     hass.services.async_register(
         DOMAIN, "probe_weekly_methods", probe_weekly,
         supports_response=SupportsResponse.ONLY,
@@ -143,7 +230,7 @@ PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform
 
 async def async_setup_entry(hass, entry) -> bool:
     """Use a token-authenticated client and fetch the initial snapshot."""
-    _LOGGER.info("Ariston Cube 1.1.0-rc.3 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
+    _LOGGER.info("Ariston Cube 1.1.0-rc.4 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
     session = async_get_clientsession(hass)
     # Cookie-based R2 login must never share the mobile bearer-token session.
     web_session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
@@ -165,7 +252,7 @@ async def async_setup_entry(hass, entry) -> bool:
     except Exception as exc:  # noqa: BLE001
         # Optional UI must never prevent boiler entity setup.
         _LOGGER.warning("Cube S weekly card could not be registered: %s", type(exc).__name__)
-    _LOGGER.info("Ariston Cube 1.1.0-rc.3 platform setup dispatched")
+    _LOGGER.info("Ariston Cube 1.1.0-rc.4 platform setup dispatched")
     return True
 
 
