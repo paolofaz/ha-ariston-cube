@@ -355,16 +355,16 @@
         const selectedNames = this._changePayload().destinations
           .map((day) => DAYS.find((d) => d[2] === day)[0]);
         const differences = selectedNames.map((name) =>
-          name + "\\nPRIMA: " + describe(before[name])
-          + "\\nDOPO: " + describe(after[name])).join("\\n\\n");
+          name + "\nPRIMA: " + describe(before[name])
+          + "\nDOPO: " + describe(after[name])).join("\n\n");
         confirmation = "Clonare il programma di " + weekday
-          + " su " + selectedNames.join(", ") + "?\\n\\n"
-          + differences + "\\n\\nConfermi la modifica sul Cube S?";
+          + " su " + selectedNames.join(", ") + "?\n\n"
+          + differences + "\n\nConfermi la modifica sul Cube S?";
       } else {
         confirmation = "Scrivere sul Cube S la modifica di " + weekday
-          + "?\\n\\nPRIMA: " + describe(before)
-          + "\\nDOPO: " + describe(after)
-          + "\\n\\nConfermi la modifica sul Cube S?";
+          + "?\n\nPRIMA: " + describe(before)
+          + "\nDOPO: " + describe(after)
+          + "\n\nConfermi la modifica sul Cube S?";
       }
       if (!window.confirm(confirmation)) return;
       this.pending = true;
