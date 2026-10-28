@@ -1,84 +1,7 @@
-preview_weekly_slice:
-  name: Preview Cube S weekly time boundary
-  description: >
-    Experimental developer action. Reads the actual Cube S weekly schedule,
-    moves one existing boundary in a local preview, and returns the before/after
-    times. Does not save or change the boiler schedule.
-  fields:
-    day:
-      required: true
-      name: Day
-      description: "0 Sunday, 1 Monday, 2 Tuesday, 3 Wednesday, 4 Thursday, 5 Friday, 6 Saturday"
-      selector:
-        number:
-          min: 0
-          max: 6
-          step: 1
-          mode: box
-    from_time:
-      required: true
-      name: Existing start time (HH:MM)
-      selector:
-        text:
-    to_time:
-      required: true
-      name: Proposed new start time (HH:MM)
-      selector:
-        text:
-
-probe_weekly_methods:
-  name: Probe Cube S weekly API methods
-  description: >
-    Sends one read-only HTTP OPTIONS request to the existing Cube S
-    schedule endpoint. Returns status and advertised method names, if any.
-    It does not write a schedule; a POST/PUT in the response is not
-    proof that its JSON format is known.
-
-test_write_weekly_slice:
-  name: "EXPERIMENTAL — write one Cube S weekly boundary"
-  description: >
-    UNSUPPORTED FIELD TEST. Makes exactly one POST to the Cube S weekly
-    schedule endpoint using a candidate JSON format; then checks the
-    complete seven-day timetable. It may be rejected or accepted with
-    different semantics. Requires fingerprint from the preview and explicit
-    confirmation. Reinstalling stable DOES NOT restore saved boiler schedules.
-  fields:
-    day:
-      name: "Day (0=Sunday, 1=Monday ... 6=Saturday)"
-      required: true
-      selector:
-        number:
-          min: 0
-          max: 6
-          step: 1
-          mode: box
-    from_time:
-      name: "Existing start time (HH:MM)"
-      required: true
-      selector:
-        text:
-    to_time:
-      name: "New start time (HH:MM)"
-      required: true
-      selector:
-        text:
-    expected_fingerprint:
-      name: "Source fingerprint from preview"
-      required: true
-      description: "Must match the freshest cloud programme before writing"
-      selector:
-        text:
-    confirm:
-      name: "I authorize this unsupported schedule-write experiment"
-      required: true
-      selector:
-        boolean:
-
-
 preview_weekly_change:
-  name: "Cube S — preview move/add/remove time band"
+  name: "Cube S — Anteprima modifica fasce"
   description: >
-    READ ONLY: fresh GET of the weekly programme, then prepare one weekday
+    SOLO LETTURA: fresh GET of the weekly programme, then prepare one weekday
     boundary move, finite start/end addition, or removal. Add requires
     explicit start (to_time) and end (end_time), in 15-minute steps.
     Returns original/modified weekday with fingerprint; no schedule POST.
@@ -129,14 +52,14 @@ preview_weekly_change:
             - Economy
 
 write_weekly_change:
-  name: "Cube S — write one weekly band change (experimental)"
+  name: "Cube S — Salva modifica fasce"
   description: >
-    An explicitly confirmed move/add/remove of one weekday band. Adding
+    Modifica confermata di una fascia settimanale del Cube S. Adding
     requires explicit start and end, creates the return-to-original preset
     at end_time, and disallows overlaps. Times use 15-minute steps.
     Fresh cloud GET and fingerprint check, exactly ONE schedule POST, and
     seven-day readback. If readback fails, inspect official app before retry.
-    This operation changes the real boiler and cannot be undone by reinstalling.
+    Questa operazione modifica il programma salvato nel cloud Ariston.
   fields:
     day:
       name: "Day (Sunday=0, Monday=1, ... Saturday=6)"
@@ -191,9 +114,9 @@ write_weekly_change:
         boolean:
 
 preview_weekly_clone:
-  name: "Cube S — preview clone from one day to several days"
+  name: "Cube S — Anteprima clonazione giorni"
   description: >
-    READ ONLY. Read the current seven-day programme once, then preview
+    SOLO LETTURA. Read the current seven-day programme once, then preview
     copying one source weekday to one or more chosen destinations. The
     before/after preview includes every selected day. No cloud write.
   fields:
@@ -217,7 +140,7 @@ preview_weekly_clone:
         object:
 
 clone_weekly_days:
-  name: "Cube S — clone one weekday to multiple selected weekdays"
+  name: "Cube S — Clona giorno"
   description: >
     Explicit confirmed write. Requires matching preview fingerprint,
     one fresh GET, ONE cloud POST for all destinations, followed by an
@@ -250,40 +173,10 @@ clone_weekly_days:
       selector:
         boolean:
 
-preview_energy_hour_alignment:
-  name: "TEST – preview Energy gas hour correction"
-  description: >
-    READ-ONLY. Compare the latest closed two-hour Ariston Smc bucket with
-    the two existing hourly Recorder statistics rows for BOTH cumulative
-    gas sensors. Does not modify any values, the gas ledger, or Recorder.
-    Only the latest completed hourly pair is eligible; older history is not touched.
-
-apply_energy_hour_alignment:
-  name: "TEST – reattribute one completed Energy hour"
-  description: >
-    EXPERIMENTAL: modify exactly one already-compiled hourly statistics row
-    per existing Ariston Cube cumulative gas sensor, after confirming the
-    previous preview fingerprint. Does not change sensor values or previous
-    history; no automatic retries. A wrong result can affect future Energy
-    presentation, so test with a Recorder backup and verify the results.
-  fields:
-    fingerprint:
-      name: "Fingerprint from preview"
-      description: "64 hexadecimal characters returned by the preview action."
-      required: true
-      selector:
-        text:
-    confirm:
-      name: "Authorize hourly statistics correction"
-      description: "Must be true. This writes existing Recorder statistics."
-      required: true
-      selector:
-        boolean:
-
 inspect_energy_hour_alignment:
-  name: "TEST – inspect a completed Energy hour (read-only)"
+  name: "Gas — Verifica statistiche di un'ora (lettura)"
   description: >
-    READ-ONLY: inspect an existing hourly Recorder row and its adjacent
+    SOLO LETTURA: inspect an existing hourly Recorder row and its adjacent
     hours for both current gas sensor IDs. No statistics import, no sensor
     update, no gas ledger mutation. Use to check the first manual correction
     after an ambiguous write result.
@@ -298,9 +191,9 @@ inspect_energy_hour_alignment:
         text:
 
 inspect_automatic_energy_hour_alignment:
-  name: "Gas — stato correzione automatica (sola lettura)"
+  name: "Gas — Ultime correzioni automatiche (lettura)"
   description: >
-    READ ONLY. Mostra gli ultimi otto tentativi automatici di allineamento
+    SOLO LETTURA. Mostra gli ultimi otto tentativi automatici di allineamento
     delle ore Energia, inclusi i periodi senza consumo, le correzioni
     confermate e gli errori non confermati. Non legge né modifica i sensori
     cumulativi, il ledger o le statistiche Recorder. Gli esiti sono
