@@ -1,6 +1,7 @@
 """Offline tests for the read-only Ariston mobile API client."""
 
 import asyncio
+import pytest
 import importlib
 from pathlib import Path
 import sys
