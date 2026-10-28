@@ -280,7 +280,9 @@ def test_add_two_boundaries_exceeds_48_limit_even_when_single_boundary_would_fit
         {"from": n * 30, "temp": n % 2} for n in range(47)
     ]
     with pytest.raises(ValueError, match="Maximum"):
-        build(raw, "add", to_time="00:15", end_time="00:45", preset="Comfort")
+        # 47 existing 30-minute transitions end at 23:00. Add two new
+        # quarter-hour boundaries after that last transition (no overlap).
+        build(raw, "add", to_time="23:15", end_time="23:45", preset="Comfort")
 
 
 def test_move_new_time_rejects_minutes_outside_quarter_hour_grid():
