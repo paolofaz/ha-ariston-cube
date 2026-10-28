@@ -1,9 +1,12 @@
-> **EXPERIMENTAL 1.1.1-rc.1 — gas-hour test on stable 1.1.0.**
-> Keeps the entire stable Cube S weekly editor, including **Clona giorno**,
-> and adds manually confirmed Energy gas-hour shift/inspection actions.
-> Existing gas sensor IDs, cumulative readings, Smc ledger, and prior HA
-> Energy history are preserved. **No automatic correction yet.**
-> [Step-by-step 15:15 test](docs/releases/v1.1.1-rc.1.md).
+> **EXPERIMENTAL v1.1.1-rc.2 — correzione gas automatica ogni due ore.**
+> Mantiene tutte le funzioni della stabile 1.1.0 (incluso **Clona giorno**)
+> e automatizza la stessa correzione delle statistiche Energia già verificata
+> sul Cube S. Alle **:15 delle ore dispari locali** controlla i consumi
+> Ariston e, solo se tutti i dati coincidono, corregge una volta la statistica
+> oraria. **Nessun retry**, nessun recupero di orari persi, nessuna modifica
+> ai sensori cumulativi, agli ID o al ledger gas. Dopo ogni ciclo verifica con
+> `ariston_cube.inspect_automatic_energy_hour_alignment` (sola lettura).
+> [Istruzioni per 2–3 fasce e note RC2](docs/releases/v1.1.1-rc.2.md).
 
 > **Stable v1.1.0 — Cube S weekly schedule editor.** On the Lovelace timetable, choose **Modifica fasce** to move an existing time, add a finite Comfort/Economy band with explicit start/end, remove a band, or **Clona giorno** onto multiple selected weekdays in one confirmed save. New times are selected in 15-minute increments. All writes require a fresh cloud preview, full-week fingerprint validation, explicit confirmation, a single POST and seven-day readback. [Release notes](docs/releases/v1.1.0.md).
 >
