@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import asyncio
 from collections.abc import Awaitable, Callable
 import logging
 from typing import Any
@@ -10,7 +11,7 @@ from typing import Any
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import AristonAuthError, AristonClient, AristonError
+from .api import AristonAuthError, AristonClient, AristonError, AristonResponseError
 from .commands import CommandRejected
 from .const import CONF_PLANT_ID, DOMAIN, SCAN_INTERVAL_SECONDS
 from .model import parse_main_data
@@ -86,11 +87,25 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self.async_update_listeners()
         try:
             confirmed = await operation()
+        except asyncio.CancelledError:
+            # Cancellation could happen after a POST was already sent.
+            # Never leave a phantom pending value or retry the command.
+            self._pending_command = None
+            self._last_command = (item_id, "non_confermato")
+            self.async_update_listeners()
+            raise
         except Exception as exc:
             self._pending_command = None
-            # Connection timeouts and delayed readback are indeterminate:
-            # inform the UI and wait for the normal read-only cloud poll.
-            if isinstance(exc, AristonError):
+            cause = exc.__cause__ if isinstance(exc, HomeAssistantError) else None
+            error = cause if cause is not None else exc
+            # Only a positive cloud readback can mark a command confirmed.
+            # A negative response is a rejection; network ambiguity and
+            # delayed readback are unconfirmed, never retried automatically.
+            if isinstance(error, AristonResponseError) and any(
+                word in str(error).lower() for word in ("refused", "rejected")
+            ):
+                status = "rifiutato"
+            elif isinstance(error, AristonError):
                 status = "non_confermato"
             else:
                 status = "rifiutato"
@@ -125,7 +140,7 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 raise HomeAssistantError(str(exc)) from exc
             except AristonError as exc:
                 _LOGGER.warning("Ariston setpoint not confirmed: %s", type(exc).__name__)
-                raise
+                raise HomeAssistantError(str(exc)) from exc
 
         await self._async_command_with_preview(item_id, value, write)
 
@@ -138,7 +153,7 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 raise HomeAssistantError(str(exc)) from exc
             except AristonError as exc:
                 _LOGGER.warning("Ariston zone mode not confirmed: %s", type(exc).__name__)
-                raise
+                raise HomeAssistantError(str(exc)) from exc
 
         await self._async_command_with_preview("ZoneMode", mode, write)
 
@@ -153,6 +168,6 @@ class AristonCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 raise HomeAssistantError(str(exc)) from exc
             except AristonError as exc:
                 _LOGGER.warning("Ariston plant control not confirmed: %s", type(exc).__name__)
-                raise
+                raise HomeAssistantError(str(exc)) from exc
 
         await self._async_command_with_preview(item_id, value, write)
