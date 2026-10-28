@@ -73,3 +73,100 @@ test_write_weekly_slice:
       required: true
       selector:
         boolean:
+
+
+preview_weekly_change:
+  name: "Cube S — preview move/add/remove time band"
+  description: >
+    READ ONLY: fresh GET of the weekly programme, then prepare one weekday
+    boundary move, addition, or removal. Returns original/modified weekday
+    with fingerprint; never sends a schedule POST.
+  fields:
+    day:
+      name: "Day (Sunday=0, Monday=1, ... Saturday=6)"
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 6
+          step: 1
+          mode: box
+    operation:
+      name: Operation
+      required: true
+      selector:
+        select:
+          options:
+            - label: Move existing boundary
+              value: move
+            - label: Add Comfort/Economy boundary
+              value: add
+            - label: Remove existing boundary
+              value: remove
+    from_time:
+      name: "Old boundary (move/remove, HH:MM)"
+      selector:
+        text:
+    to_time:
+      name: "New boundary (move/add, HH:MM)"
+      selector:
+        text:
+    preset:
+      name: "New preset (add only)"
+      selector:
+        select:
+          options:
+            - Comfort
+            - Economy
+
+write_weekly_change:
+  name: "Cube S — write one weekly band change (experimental)"
+  description: >
+    An explicitly confirmed move/add/remove of ONE boundary on ONE weekday.
+    Fresh cloud GET and fingerprint check, exactly ONE schedule POST, and
+    seven-day readback. If readback fails, inspect official app before retry.
+    This operation changes the real boiler and cannot be undone by reinstalling.
+  fields:
+    day:
+      name: "Day (Sunday=0, Monday=1, ... Saturday=6)"
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 6
+          step: 1
+          mode: box
+    operation:
+      name: Operation
+      required: true
+      selector:
+        select:
+          options:
+            - move
+            - add
+            - remove
+    from_time:
+      name: "Old boundary (move/remove, HH:MM)"
+      selector:
+        text:
+    to_time:
+      name: "New boundary (move/add, HH:MM)"
+      selector:
+        text:
+    preset:
+      name: "New preset (add only)"
+      selector:
+        select:
+          options:
+            - Comfort
+            - Economy
+    expected_fingerprint:
+      name: Fingerprint from preview
+      required: true
+      selector:
+        text:
+    confirm:
+      name: Confirm one real Cube S schedule POST
+      required: true
+      selector:
+        boolean:
