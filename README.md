@@ -162,6 +162,12 @@ data:
 
 In caso di anomalia, apri una [segnalazione GitHub](https://github.com/paolofaz/ha-ariston-cube/issues) indicando versione di Home Assistant, versione dell'integrazione, modello della caldaia e log **senza password, token o dati privati**.
 
+# 🍺 Supporta il progetto
+
+Se hai trovato utile il mio progetto e vuoi supportare il mio lavoro puoi offrirmi una birretta...
+
+[![Buy Me a Beer](https://img.shields.io/badge/Buy%20Me%20a%20Beer-0070ba?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/PaoloFazari)
+
 ## Sviluppo e contributi
 
 Codice Python e JavaScript, licenza [MIT](LICENSE). Le modifiche sono verificate in GitHub Actions con test Python, test della scheda Lovelace (Node), [HACS validation](https://github.com/hacs/action) e [hassfest](https://github.com/home-assistant/actions/tree/master/hassfest).
