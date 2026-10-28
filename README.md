@@ -1,11 +1,14 @@
-> **NEW experimental 1.1.0-rc.4 — Cube S weekly editor now supports MOVE, ADD and REMOVE of a single Comfort/Economy boundary.**
+> **FIXED IN EXPERIMENTAL 1.1.0-rc.5:** Adding/removing Cube S time bands now accepts extra zone-level metadata returned by Ariston, using the SAME POST envelope as the successful rc.3 time-moving test. An error like "Unknown zone metadata" in rc.4 was a PRE-POST validation refusal and did not change the boiler. After a confirmed write, the editor stays open and requires a fresh preview for each further edit. See [rc.5 notes](docs/releases/v1.1.0-rc.5.md).
+> **CAUTION:** Add/remove have offline test coverage but require field verification on your real Cube S. Keep a screenshot of your original schedule and verify the Ariston app before leaving this branch. This build does NOT include the independent gas-hour correction rc.2; finish both experiments separately before combining them.
+
+> **NEW experimental 1.1.0-rc.5 — Cube S weekly editor now supports MOVE, ADD and REMOVE of a single Comfort/Economy boundary.**
 > Open the existing weekly card and choose an operation; always preview and confirm before one real cloud write.
 > Add/remove are tested offline but have **not yet been verified on the live boiler**; only boundary moving was validated in the Ariston app in rc.3.
 > **Do not install this version while testing gas-hour alignment rc.2:** these are separate experimental branches, not a combined release.
 > Stable 1.0.1 and all existing release tags remain untouched.
-> Details: [RC4 release notes](docs/releases/v1.1.0-rc.4.md).
+> Details: [RC4 release notes](docs/releases/v1.1.0-rc.5.md).
 
-> **EXPERIMENTAL TEST BUILD 1.1.0-rc.4 — NOT the stable 1.0.1.**
+> **EXPERIMENTAL TEST BUILD 1.1.0-rc.5 — NOT the stable 1.0.1.**
 > This branch contains an unsupported, user-triggered Cube S weekly schedule
 > write experiment. The endpoint advertises POST, but its JSON body is still
 > unverified. If the server accepts an unexpected format, saved timings may
@@ -212,7 +215,7 @@ title: Fasce riscaldamento Cube S
 ```
 
 With a Storage dashboard, the integration upgrades the registered weekly
-resource to `/ariston_cube/ariston-cube-weekly-card.js?v=1.1.0-rc.4`.
+resource to `/ariston_cube/ariston-cube-weekly-card.js?v=1.1.0-rc.5`.
 If the browser still renders the old card, hard-refresh the dashboard.
 YAML resource mode requires updating the resource URL manually. If reverting
 to stable **1.0.1**, also revert the weekly resource URL to `?v=1.0.1` in
