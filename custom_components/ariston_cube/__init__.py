@@ -351,6 +351,28 @@ async def async_setup(hass, config) -> bool:
         supports_response=SupportsResponse.ONLY,
     )
 
+    async def inspect_automatic_energy_hour(call):
+        """Read-only status of recent automatic cycles, never a cloud write."""
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry required")
+        runner = getattr(entries[0].runtime_data, "energy_hour_runner", None)
+        if runner is None:
+            return {
+                "status": "read_only_auto_energy_hour_status",
+                "enabled": False, "last_attempt": None, "recent_attempts": [],
+            }
+        return runner.status()
+
+    hass.services.async_register(
+        DOMAIN, "inspect_automatic_energy_hour_alignment",
+        inspect_automatic_energy_hour,
+        supports_response=SupportsResponse.ONLY,
+    )
+
     hass.services.async_register(
         DOMAIN, "probe_weekly_methods", probe_weekly,
         supports_response=SupportsResponse.ONLY,
@@ -389,10 +411,39 @@ async def async_setup_entry(hass, entry) -> bool:
     except Exception as exc:  # noqa: BLE001
         # Optional UI must never prevent boiler entity setup.
         _LOGGER.warning("Cube S weekly card could not be registered: %s", type(exc).__name__)
+    # Single local-time scheduler, only after all entity platforms finished
+    # initial setup. Manual actions stay available independently.
+    from homeassistant.helpers.event import async_track_time_change
+    from .energy_automation import AutomaticEnergyHourRunner
+
+    runner = AutomaticEnergyHourRunner(hass, coordinator)
+    # HA invokes async callbacks for local HH:15:00. The runner filters
+    # even hours, validates the exact eligible bucket, and does NOT retry.
+    unsubscribe = async_track_time_change(
+        hass, runner.async_tick, minute=15, second=0
+    )
+    coordinator.energy_hour_runner = runner
+    coordinator.energy_hour_unsubscribe = unsubscribe
+    _LOGGER.info(
+        "Ariston Cube Energy-hour automatic test enabled at odd local hours :15"
+    )
     _LOGGER.info("Ariston Cube 1.1.1-rc.1 platform setup dispatched")
     return True
 
 
 async def async_unload_entry(hass, entry) -> bool:
     """Unload entity platforms; Home Assistant cleans up the client session."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        coordinator = getattr(entry, "runtime_data", None)
+        if coordinator is not None:
+            runner = getattr(coordinator, "energy_hour_runner", None)
+            if runner is not None:
+                runner.stop()
+            unsubscribe = getattr(
+                coordinator, "energy_hour_unsubscribe", None
+            )
+            if unsubscribe is not None:
+                unsubscribe()
+                coordinator.energy_hour_unsubscribe = None
+    return unloaded
