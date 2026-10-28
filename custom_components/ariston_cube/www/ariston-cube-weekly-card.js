@@ -1,4 +1,4 @@
-/* Ariston Cube weekly card, experimental edit mode (1.1.0-rc.6).
+/* Ariston Cube weekly card, weekly clone editor (1.1.0-rc.7).
  * Move, insert or delete ONE weekday boundary per save.
  * The backend performs a fresh GET, fingerprint check, ONE POST, full readback.
  * Never send requests directly to Ariston from this Lovelace card.
@@ -39,6 +39,10 @@
     ".btn:disabled{opacity:.48;cursor:not-allowed}",
     ".editor{margin-top:16px;padding:14px;border:1px solid var(--divider-color);border-radius:10px}",
     ".editor h3{margin:0 0 12px;font-size:.98rem}",
+    ".clone-targets{border:1px solid var(--divider-color);border-radius:8px;margin:12px 0;padding:12px}",
+    ".clone-targets legend{font-size:.82rem;font-weight:600}",
+    ".clone-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}",
+    ".clone-option{display:flex;align-items:center;font-size:.82rem;gap:4px}",
     ".fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}",
     ".field{display:flex;flex-direction:column;gap:5px;font-size:.82rem}",
     ".field select,.field input{box-sizing:border-box;width:100%;padding:9px;border:1px solid var(--divider-color);border-radius:7px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit}",
@@ -145,6 +149,7 @@
       this.toTime = "";
       this.endTime = "";
       this.operation = "move";
+      this.cloneTargets = [];
       this.preset = "Comfort";
       this.preview = null;
       this.pending = false;
@@ -173,6 +178,11 @@
       return Boolean(this._canEdit
         && services.preview_weekly_change && services.write_weekly_change);
     }
+    get _canClone() {
+      const services = this.homeAssistant?.services?.ariston_cube || {};
+      return Boolean(this._canEdit
+        && services.preview_weekly_clone && services.clone_weekly_days);
+    }
     _invalidatePreview() {
       this.preview = null;
       this.previewRequest = null;
@@ -183,6 +193,7 @@
       if (this.pending || this.blocked) return;
       const weekly = this._weekly;
       this.dayIndex = index;
+      this.cloneTargets = [];
       const boundaries = (weekly[index] || []).filter((p) => p.minute > 0);
       this.fromTime = boundaries.length ? time(boundaries[0].minute) : "";
       this.toTime = this.operation === "add" ? "" : this.fromTime;
@@ -214,6 +225,12 @@
     }
     _changePayload() {
       const operation = this.operation || "move";
+      if (operation === "clone") return {
+        source_day: DAYS[this.dayIndex][2],
+        destinations: this.cloneTargets
+          .map((index) => DAYS[index][2]).sort((a, b) => a - b),
+        operation: "clone"
+      };
       return {
         day: DAYS[this.dayIndex][2], operation,
         from_time: operation === "add" ? "" : this.fromTime,
@@ -226,6 +243,12 @@
       const kind = this.operation || "move";
       const weekly = this._weekly[this.dayIndex];
       if (!weekly || !weekly.length) return false;
+      if (kind === "clone") return this._canClone
+        && this.cloneTargets.length >= 1 && this.cloneTargets.length <= 6
+        && new Set(this.cloneTargets).size === this.cloneTargets.length
+        && this.cloneTargets.every((index) => Number.isInteger(index)
+          && index >= 0 && index < 7 && index !== this.dayIndex
+          && Boolean(this._weekly[index]?.length));
       if (kind === "move") return validTime(this.fromTime)
         && quarterHour(this.toTime) && this.fromTime !== this.toTime
         && this.fromTime !== "00:00" && this.toTime !== "00:00";
@@ -265,20 +288,39 @@
       this.key = "";
       this.render();
       try {
-        const service = operation === "move"
-          ? "preview_weekly_slice" : "preview_weekly_change";
-        const data = operation === "move" ? {
+        const service = operation === "clone"
+          ? "preview_weekly_clone"
+          : operation === "move" ? "preview_weekly_slice" : "preview_weekly_change";
+        const data = operation === "clone" ? {
+          source_day: payload.source_day, destinations: payload.destinations
+        } : operation === "move" ? {
           day: payload.day, from_time: payload.from_time,
           to_time: payload.to_time
         } : payload;
         const result = await this._invoke(service, data);
+        const cloneValid = operation === "clone"
+          && result.kind === "clone"
+          && result.source_day === payload.source_day
+          && result.source_weekday === DAYS[this.dayIndex][0]
+          && Array.isArray(result.destinations)
+          && JSON.stringify(result.destinations) === JSON.stringify(payload.destinations)
+          && Array.isArray(result.source_schedule)
+          && result.before && !Array.isArray(result.before)
+          && result.after && !Array.isArray(result.after)
+          && payload.destinations.every((day) => {
+            const name = DAYS.find((d) => d[2] === day)?.[0];
+            return name && Array.isArray(result.before[name])
+              && Array.isArray(result.after[name]);
+          });
+        const ordinaryValid = operation !== "clone"
+          && result.weekday === DAYS[this.dayIndex][0]
+          && (operation === "move" || result.operation === operation)
+          && Array.isArray(result.before) && Array.isArray(result.after);
         if (result.status !== "preview_only_no_cloud_write"
             || result.changed !== true
             || typeof result.source_fingerprint !== "string"
             || !/^[a-f0-9]{64}$/.test(result.source_fingerprint)
-            || result.weekday !== DAYS[this.dayIndex][0]
-            || (operation !== "move" && result.operation !== operation)
-            || !Array.isArray(result.before) || !Array.isArray(result.after)
+            || !(cloneValid || ordinaryValid)
             || JSON.stringify(this._changePayload()) !== snapshot) {
           throw new Error("Anteprima non coerente. Nessuna modifica inviata.");
         }
@@ -302,11 +344,28 @@
       const before = this.preview.before, after = this.preview.after;
       const fingerprint = this.preview.source_fingerprint;
       const weekday = DAYS[this.dayIndex][0];
-      if (!Array.isArray(before) || !Array.isArray(after)
-          || !/^[a-f0-9]{64}$/.test(fingerprint)) return;
-      const confirmation = "Scrivere sul Cube S la modifica di " + weekday
-        + "?\n\nPRIMA: " + describe(before) + "\nDOPO: " + describe(after)
-        + "\n\nIl salvataggio è reale e non si annulla reinstallando la stable.";
+      const isClone = this.operation === "clone";
+      if (!/^[a-f0-9]{64}$/.test(fingerprint)) return;
+      if (!isClone && (!Array.isArray(before) || !Array.isArray(after))) return;
+      if (isClone && (!before || !after
+          || !Array.isArray(this.preview.changed_weekdays)
+          || this.preview.changed_weekdays.length < 1)) return;
+      let confirmation;
+      if (isClone) {
+        const selectedNames = this._changePayload().destinations
+          .map((day) => DAYS.find((d) => d[2] === day)[0]);
+        const differences = selectedNames.map((name) =>
+          name + "\\nPRIMA: " + describe(before[name])
+          + "\\nDOPO: " + describe(after[name])).join("\\n\\n");
+        confirmation = "Clonare il programma di " + weekday
+          + " su " + selectedNames.join(", ") + "?\\n\\n"
+          + differences + "\\n\\nConfermi la modifica sul Cube S?";
+      } else {
+        confirmation = "Scrivere sul Cube S la modifica di " + weekday
+          + "?\\n\\nPRIMA: " + describe(before)
+          + "\\nDOPO: " + describe(after)
+          + "\\n\\nConfermi la modifica sul Cube S?";
+      }
       if (!window.confirm(confirmation)) return;
       this.pending = true;
       this.blocked = true;  // At most one write attempt in this card session.
@@ -314,9 +373,13 @@
       this.render();
       try {
         const payload = this._changePayload();
-        const service = payload.operation === "move"
-          ? "test_write_weekly_slice" : "write_weekly_change";
-        const data = payload.operation === "move" ? {
+        const service = payload.operation === "clone"
+          ? "clone_weekly_days"
+          : payload.operation === "move"
+            ? "test_write_weekly_slice" : "write_weekly_change";
+        const data = payload.operation === "clone" ? {
+          source_day: payload.source_day, destinations: payload.destinations
+        } : payload.operation === "move" ? {
           day: payload.day, from_time: payload.from_time,
           to_time: payload.to_time
         } : payload;
@@ -366,7 +429,8 @@
       editor.append(el("p", "subtitle",
         "Una sola operazione per salvataggio. Anteprima obbligatoria, poi conferma esplicita sul Cube S."));
       const fields = el("div", "fields");
-      const dayField = el("label", "field", "Giorno");
+      const dayField = el("label", "field",
+        this.operation === "clone" ? "Giorno sorgente" : "Giorno");
       const daySelect = el("select");
       daySelect.setAttribute("aria-label", "Giorno");
       DAYS.forEach(([label], index) => {
@@ -387,7 +451,8 @@
         for (const [key, label] of [
           ["move", "Sposta orario"],
           ["add", "Aggiungi fascia"],
-          ["remove", "Elimina fascia"]
+          ["remove", "Elimina fascia"],
+          ...(this._canClone ? [["clone", "Clona giorno"]] : [])
         ]) {
           const opt = el("option", "", label);
           opt.value = key;
@@ -397,6 +462,7 @@
         opSelect.disabled = this.pending || this.blocked;
         opSelect.addEventListener("change", () => {
           this.operation = opSelect.value;
+          this.cloneTargets = [];
           const points = (weekly[this.dayIndex] || []).filter((p) => p.minute > 0);
           this.fromTime = points.length ? time(points[0].minute) : "";
           this.toTime = this.operation === "add" ? "" : this.fromTime;
@@ -409,8 +475,40 @@
         fields.append(opField);
       }
 
+      if (this.operation === "clone") {
+        const cloneBox = el("fieldset", "clone-targets");
+        const heading = el("legend", "", "Copia su questi giorni (puoi selezionarne più di uno)");
+        cloneBox.append(heading);
+        const options = el("div", "clone-grid");
+        DAYS.forEach(([name], index) => {
+          if (index === this.dayIndex) return;
+          const option = el("label", "clone-option");
+          const checkbox = el("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = this.cloneTargets.includes(index);
+          checkbox.disabled = this.pending || this.blocked;
+          checkbox.setAttribute("aria-label", "Clona su " + name);
+          checkbox.addEventListener("change", () => {
+            const selected = new Set(this.cloneTargets);
+            if (checkbox.checked) selected.add(index);
+            else selected.delete(index);
+            this.cloneTargets = Array.from(selected).sort((a, b) => a - b);
+            this._invalidatePreview();
+            this.key = "";
+            this.render();
+          });
+          option.append(checkbox, document.createTextNode(" " + name));
+          options.append(option);
+        });
+        cloneBox.append(options);
+        editor.append(cloneBox);
+        editor.append(el("p", "subtitle",
+          "Il programma del giorno sorgente sostituisce quello dei giorni selezionati. "
+          + "Gli altri giorni non cambiano."));
+      }
+
       const boundaries = (weekly[this.dayIndex] || []).filter((p) => p.minute > 0);
-      if (this.operation !== "add") {
+      if (this.operation !== "add" && this.operation !== "clone") {
         const fromField = el("label", "field",
           this.operation === "remove" ? "Fascia da eliminare" : "Fascia da spostare");
         const fromSelect = el("select");
@@ -441,7 +539,7 @@
         fromField.append(fromSelect);
         fields.append(fromField);
       }
-      if (this.operation !== "remove") {
+      if (this.operation !== "remove" && this.operation !== "clone") {
         const toField = el("label", "field",
           this.operation === "add" ? "Inizio nuova fascia (ogni 15 min)" : "Nuovo orario (ogni 15 min)");
         const toSelect = quarterSelect(
@@ -500,7 +598,8 @@
       previewBtn.disabled = this.pending || this.blocked || !this._changeIsValid();
       previewBtn.addEventListener("click", () => this._previewChange());
       actions.append(previewBtn);
-      const saveBtn = el("button", "btn", "Salva sul Cube S");
+      const saveBtn = el("button", "btn",
+        this.operation === "clone" ? "Clona sui giorni selezionati" : "Salva sul Cube S");
       saveBtn.type = "button";
       saveBtn.disabled = this.pending || this.blocked || !this.preview
         || this.preview.changed !== true || !this._changeIsValid();
@@ -509,9 +608,25 @@
       editor.append(actions);
       if (this.preview) {
         const previewBox = el("div", "preview");
-        previewBox.append(el("strong", "", "Anteprima dal cloud — " + this.preview.weekday));
-        previewBox.append(el("p", "line", "Prima: " + describe(this.preview.before)));
-        previewBox.append(el("p", "line", "Dopo: " + describe(this.preview.after)));
+        if (this.operation === "clone") {
+          previewBox.append(el("strong", "",
+            "Anteprima clone — sorgente " + this.preview.source_weekday));
+          previewBox.append(el("p", "line",
+            "Programma sorgente: " + describe(this.preview.source_schedule)));
+          for (const name of this.preview.destination_weekdays) {
+            previewBox.append(el("p", "line", name + " — prima: "
+              + describe(this.preview.before[name])));
+            previewBox.append(el("p", "line", name + " — dopo: "
+              + describe(this.preview.after[name])));
+          }
+        } else {
+          previewBox.append(el("strong", "",
+            "Anteprima dal cloud — " + this.preview.weekday));
+          previewBox.append(el("p", "line",
+            "Prima: " + describe(this.preview.before)));
+          previewBox.append(el("p", "line",
+            "Dopo: " + describe(this.preview.after)));
+        }
         editor.append(previewBox);
       }
       if (this.message) {
@@ -536,7 +651,7 @@
       this.displayedSchedule = scheduleKey;
       const current = JSON.stringify([state?.state, values, this.config.title,
         this.editing, this.dayIndex, this.operation, this.fromTime, this.toTime,
-        this.endTime, this.preset,
+        this.endTime, this.preset, this.cloneTargets,
         Boolean(this.preview), this.pending, this.blocked,
         this.message, this.messageKind, this._canEdit]);
       if (this.key === current) return;
