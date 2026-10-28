@@ -231,7 +231,7 @@ PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform
 
 async def async_setup_entry(hass, entry) -> bool:
     """Use a token-authenticated client and fetch the initial snapshot."""
-    _LOGGER.info("Ariston Cube 1.3.0-rc.1 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
+    _LOGGER.info("Ariston Cube 1.3.0 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
     session = async_get_clientsession(hass)
     # Cookie-based R2 login must never share the mobile bearer-token session.
     web_session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
@@ -269,7 +269,7 @@ async def async_setup_entry(hass, entry) -> bool:
     _LOGGER.info(
         "Ariston Cube Energy-hour automatic alignment enabled at odd local hours :15"
     )
-    _LOGGER.info("Ariston Cube 1.3.0-rc.1 platform setup dispatched")
+    _LOGGER.info("Ariston Cube 1.3.0 platform setup dispatched")
     return True
 
 

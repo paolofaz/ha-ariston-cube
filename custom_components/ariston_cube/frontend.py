@@ -1,6 +1,6 @@
 """Register the optional Cube S weekly Lovelace card.
 
-The DHW custom card was retired for 1.3.0-rc.1. Keep the weekly timeline;
+The DHW custom card was retired for 1.3.0. Keep the weekly timeline;
 do not alter dashboards or their saved cards automatically.
 """
 
@@ -13,7 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).parent / "www"
 _CARD_PATH = "/ariston_cube/ariston-cube-weekly-card.js"
-_CARD_RESOURCE = _CARD_PATH + "?v=1.3.0-rc.1"
+_CARD_RESOURCE = _CARD_PATH + "?v=1.3.0"
 _FLAG = "ariston_cube_frontend_registered"
 
 
