@@ -1,4 +1,4 @@
-/* Ariston Cube weekly card, experimental edit mode (1.1.0-rc.5).
+/* Ariston Cube weekly card, experimental edit mode (1.1.0-rc.6).
  * Move, insert or delete ONE weekday boundary per save.
  * The backend performs a fresh GET, fingerprint check, ONE POST, full readback.
  * Never send requests directly to Ariston from this Lovelace card.
@@ -101,6 +101,33 @@
       && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
 
+  function minuteOf(value) {
+    return validTime(value) ? Number(value.slice(0, 2)) * 60
+      + Number(value.slice(3, 5)) : null;
+  }
+  function quarterHour(value) {
+    const minute = minuteOf(value);
+    return minute !== null && minute % 15 === 0;
+  }
+  function quarterSelect(value, ariaLabel, onChange) {
+    // Some browsers allow arbitrary minutes in input type=time even with
+    // step=900. Offer ONLY selectable quarter-hour positions instead.
+    const select = el("select");
+    select.setAttribute("aria-label", ariaLabel);
+    const placeholder = el("option", "", "Seleziona un orario");
+    placeholder.value = "";
+    select.append(placeholder);
+    for (let minute = 15; minute < 1440; minute += 15) {
+      const at = time(minute);
+      const option = el("option", "", at);
+      option.value = at;
+      select.append(option);
+    }
+    select.value = quarterHour(value) && minuteOf(value) > 0 ? value : "";
+    select.addEventListener("change", () => onChange(select.value));
+    return select;
+  }
+
   class AristonCubeWeeklyCard extends HTMLElement {
     static getStubConfig() {
       return {entity: "sensor.replace_with_weekly_program_sensor"};
@@ -116,6 +143,7 @@
       this.dayIndex = 0;
       this.fromTime = "";
       this.toTime = "";
+      this.endTime = "";
       this.operation = "move";
       this.preset = "Comfort";
       this.preview = null;
@@ -157,7 +185,8 @@
       this.dayIndex = index;
       const boundaries = (weekly[index] || []).filter((p) => p.minute > 0);
       this.fromTime = boundaries.length ? time(boundaries[0].minute) : "";
-      this.toTime = this.operation === "add" ? "12:00" : this.fromTime;
+      this.toTime = this.operation === "add" ? "" : this.fromTime;
+      this.endTime = "";
       this._invalidatePreview();
       this.key = "";
       this.render();
@@ -189,6 +218,7 @@
         day: DAYS[this.dayIndex][2], operation,
         from_time: operation === "add" ? "" : this.fromTime,
         to_time: operation === "remove" ? "" : this.toTime,
+        end_time: operation === "add" ? this.endTime : "",
         preset: operation === "add" ? this.preset : ""
       };
     }
@@ -197,14 +227,21 @@
       const weekly = this._weekly[this.dayIndex];
       if (!weekly || !weekly.length) return false;
       if (kind === "move") return validTime(this.fromTime)
-        && validTime(this.toTime) && this.fromTime !== this.toTime
+        && quarterHour(this.toTime) && this.fromTime !== this.toTime
         && this.fromTime !== "00:00" && this.toTime !== "00:00";
       if (!this._canAddRemove) return false;
-      if (kind === "add") return validTime(this.toTime)
-        && this.toTime !== "00:00"
-        && ["Comfort", "Economy"].includes(this.preset)
-        && weekly.length < 48
-        && !weekly.some((p) => time(p.minute) === this.toTime);
+      if (kind === "add") {
+        const start = minuteOf(this.toTime), end = minuteOf(this.endTime);
+        if (!quarterHour(this.toTime) || !quarterHour(this.endTime)
+            || start <= 0 || end <= start || !["Comfort", "Economy"].includes(this.preset)
+            || weekly.some((p) => p.minute === start)
+            || weekly.some((p) => start < p.minute && p.minute < end)) return false;
+        const preceding = weekly.filter((p) => p.minute < start);
+        const oldPreset = preceding.length ? preceding[preceding.length - 1].preset : null;
+        if (!oldPreset || oldPreset === this.preset.toLowerCase()) return false;
+        const endExists = weekly.some((p) => p.minute === end);
+        return weekly.length + (endExists ? 1 : 2) <= 48;
+      }
       if (kind === "remove") return validTime(this.fromTime)
         && this.fromTime !== "00:00"
         && weekly.length > 1
@@ -362,7 +399,8 @@
           this.operation = opSelect.value;
           const points = (weekly[this.dayIndex] || []).filter((p) => p.minute > 0);
           this.fromTime = points.length ? time(points[0].minute) : "";
-          this.toTime = this.operation === "add" ? "12:00" : this.fromTime;
+          this.toTime = this.operation === "add" ? "" : this.fromTime;
+          this.endTime = "";
           this._invalidatePreview();
           this.key = "";
           this.render();
@@ -405,20 +443,34 @@
       }
       if (this.operation !== "remove") {
         const toField = el("label", "field",
-          this.operation === "add" ? "Inizio nuova fascia" : "Nuovo orario");
-        const toInput = el("input");
-        toInput.type = "time";
-        toInput.step = "900";
-        toInput.value = this.toTime || this.fromTime || "12:00";
-        toInput.disabled = this.pending || this.blocked;
-        toInput.addEventListener("change", () => {
-          this.toTime = toInput.value;
-          this._invalidatePreview();
-          this.key = "";
-          this.render();
-        });
-        toField.append(toInput);
+          this.operation === "add" ? "Inizio nuova fascia (ogni 15 min)" : "Nuovo orario (ogni 15 min)");
+        const toSelect = quarterSelect(
+          this.toTime, "Inizio o nuovo orario (15 minuti)", (value) => {
+            this.toTime = value;
+            this._invalidatePreview();
+            this.key = "";
+            this.render();
+          }
+        );
+        toSelect.disabled = this.pending || this.blocked;
+        toField.append(toSelect);
         fields.append(toField);
+      }
+      if (this.operation === "add") {
+        const endField = el("label", "field", "Fine nuova fascia (ogni 15 min)");
+        const endSelect = quarterSelect(
+          this.endTime, "Fine nuova fascia (15 minuti)", (value) => {
+            this.endTime = value;
+            this._invalidatePreview();
+            this.key = "";
+            this.render();
+          }
+        );
+        endSelect.disabled = this.pending || this.blocked;
+        endField.append(endSelect);
+        fields.append(endField);
+        editor.append(el("p", "subtitle",
+          "Alla fine torna la modalità originale. Non sono ammesse sovrapposizioni."));
       }
       if (this.operation === "add") {
         const presetField = el("label", "field", "Modalità nuova fascia");
@@ -483,7 +535,8 @@
       }
       this.displayedSchedule = scheduleKey;
       const current = JSON.stringify([state?.state, values, this.config.title,
-        this.editing, this.dayIndex, this.operation, this.fromTime, this.toTime, this.preset,
+        this.editing, this.dayIndex, this.operation, this.fromTime, this.toTime,
+        this.endTime, this.preset,
         Boolean(this.preview), this.pending, this.blocked,
         this.message, this.messageKind, this._canEdit]);
       if (this.key === current) return;
