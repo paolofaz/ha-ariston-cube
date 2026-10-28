@@ -36,6 +36,9 @@ def load(monkeypatch):
         pass
 
     class FakeUpdateCoordinator:
+        # Production DataUpdateCoordinator is generic at class creation time.
+        __class_getitem__ = classmethod(lambda cls, typ: cls)
+
         def __init__(self, hass, logger, *, name, update_interval):
             self.data = None
             self.published = []
