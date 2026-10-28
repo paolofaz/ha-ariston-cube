@@ -296,3 +296,14 @@ inspect_energy_hour_alignment:
       required: true
       selector:
         text:
+
+inspect_automatic_energy_hour_alignment:
+  name: "Gas — stato correzione automatica (sola lettura)"
+  description: >
+    READ ONLY. Mostra gli ultimi otto tentativi automatici di allineamento
+    delle ore Energia, inclusi i periodi senza consumo, le correzioni
+    confermate e gli errori non confermati. Non legge né modifica i sensori
+    cumulativi, il ledger o le statistiche Recorder. Gli esiti sono
+    conservati solo in memoria e si azzerano riavviando Home Assistant.
+    Gli aggiornamenti automatici avvengono ogni due ore alle :15 delle
+    ore dispari locali; non ci sono recuperi di cicli persi né retry.
