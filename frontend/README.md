@@ -1,78 +1,71 @@
-# Cube S weekly timetable Lovelace card (stable 1.1.0)
+# Scheda settimanale Ariston Cube S · Home Assistant
 
-The integration bundles `ariston-cube-weekly-card.js`. For storage-mode
-Lovelace dashboards Home Assistant registers the resource automatically;
-for YAML dashboards register the JavaScript resource manually.
+La scheda Lovelace `custom:ariston-cube-weekly-card` è inclusa
+nell'integrazione **Ariston Cube 1.3.0 stabile**. Mostra il programma reale
+settimanale del Cube S e permette di modificarlo con conferma esplicita.
 
-## Editing the real weekly Comfort/Economy schedule
+## Funzioni della scheda
 
-Tap **Modifica fasce** or select a weekday. The **Operazione** menu offers:
+- **Sposta orario**: sposta un cambio Comfort/Economy esistente su uno
+  degli orari di 15 minuti.
+- **Aggiungi fascia**: scegli ora iniziale, ora finale e preset
+  Comfort/Economy; il programma precedente riprende all'ora finale.
+- **Elimina fascia**: rimuovi un cambio orario; viene eliminata anche
+  l'eventuale fascia di ripristino diventata ridondante.
+- **Clona giorno**: scegli un giorno sorgente e uno o più giorni
+  destinatari. La scheda confronta gli orari **prima/dopo** per ciascuno.
 
-- **Sposta orario**: choose an existing boundary and a new 15-minute time.
-- **Aggiungi fascia**: choose *start*, *end* and Comfort/Economy; the prior
-  preset resumes at the end. Overlapping programmed boundaries are refused.
-- **Elimina fascia**: remove a boundary. If it was an inserted temporary
-  band whose adjacent restoration is redundant, remove that restoration too.
-- **Clona giorno**: choose **Giorno sorgente**, then check any number of
-  other days (up to six). Example: Monday to Wednesday, Friday and Sunday.
-  The editor shows the old and new programme for each destination.
+Ogni operazione segue **Anteprima → approvazione → un singolo POST cloud**
+con validazione del fingerprint e lettura dei programmi di tutti
+sette i giorni. Se una scrittura ha esito incerto, consulta l'app
+Ariston prima di tentare un'altra modifica.
 
-Every operation requires **Anteprima** and **explicit confirmation** before
-the integration sends **one cloud POST**. The backend reads the entire
-current weekly schedule and fingerprints it to reject stale changes. It
-then reads back and verifies **all seven weekdays** after the write.
+## Installazione automatica e manuale
 
-The confirmation popup shows the affected day or days and before/after
-values. It does not contain a sentence about reverting to stable software.
-
-After a confirmed write the editor stays open for another independent
-preview and confirmation. If cloud write confirmation is ambiguous, the
-editor blocks another write: **inspect the official Ariston app** first.
-Cloud programme changes persist across software version changes.
-
-**The multi-target clone action is newly added to v1.1.0 and has passed
-offline and simulated cloud tests; it requires a deliberate live Cube S
-field check.** The earlier move/add/remove operations were field-tested.
-
-## Developer Tools / Actions (optional)
-
-Use `ariston_cube.preview_weekly_clone` read-only:
+Con dashboard **Storage**, la risorsa JS è registrata automaticamente.
+Con dashboard **YAML**, aggiungi una risorsa di tipo modulo:
 
 ```yaml
-action: ariston_cube.preview_weekly_clone
-data:
-  source_day: 1
-  destinations: [3, 5, 0]
+resources:
+  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.3.0
+    type: module
 ```
 
-Only `ariston_cube.clone_weekly_days` with the **same source/destinations**,
-the returned `source_fingerprint` as `expected_fingerprint`, and
-`confirm: true` sends a real one-shot cloud POST. The Lovelace card
-handles the entire preview/confirmation procedure for you.
-
-See [stable release notes](../docs/releases/v1.1.0.md).
-
-
-## Manual fallback for YAML-mode dashboards
-
-Copy the checked-in `frontend/ariston-cube-weekly-card.js` file to
-Home Assistant's `/config/www/ariston-cube-weekly-card.js`.
-In dashboard resources add this module URL:
-
-```text
-/local/ariston-cube-weekly-card.js
-```
-
-Then add a manual Lovelace card, replacing the placeholder with your
-actual weekly-programme sensor entity ID:
+Per usare la scheda, aggiungi manualmente (sostituendo l'ID
+con quello reale del sensore settimanale):
 
 ```yaml
 type: custom:ariston-cube-weekly-card
 entity: sensor.SOSTITUISCI_CON_IL_TUO_ID_REALE
-title: Fasce riscaldamento Cube S
+title: Programma riscaldamento Cube S
 ```
 
-Storage-mode Lovelace dashboards normally do **not** need these manual steps;
-the integration registers the versioned resource automatically. After any
-update, refresh the Home Assistant browser cache if the old card remains
-visible.
+Se visualizzi una vecchia versione, aggiorna l'URL della risorsa e
+svuota la cache del browser.
+
+## Alternativa: JavaScript copiato manualmente
+
+Se non usi la risorsa servita dall'integrazione, puoi copiare
+`frontend/ariston-cube-weekly-card.js` nella cartella
+`<config>/www/ariston-cube-weekly-card.js` di Home Assistant.
+In questo caso registra la risorsa **/local/ariston-cube-weekly-card.js**
+come modulo nella dashboard e assicurati di tenerne aggiornato
+il contenuto dopo gli upgrade. Il caricamento automatico
+`/ariston_cube/...` resta l'opzione raccomandata.
+
+## Azioni sottostanti
+
+Le operazioni usano **soltanto** le quattro azioni ufficiali:
+`ariston_cube.preview_weekly_change`,
+`ariston_cube.write_weekly_change`,
+`ariston_cube.preview_weekly_clone` e
+`ariston_cube.clone_weekly_days`.
+
+Non richiedono più azioni `TEST` o API sperimentali. Il salvataggio
+non viene mai ritentato automaticamente dopo una risposta ambigua.
+
+Per il gas restano due azioni diagnostiche in sola lettura;
+l'automatismo gas della stabile 1.2.0 è invariato.
+
+[README principale](../README.md) ·
+[Note della stabile 1.3.0](../docs/releases/v1.3.0.md)

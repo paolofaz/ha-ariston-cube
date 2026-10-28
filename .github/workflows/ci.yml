@@ -30,16 +30,39 @@ jobs:
       - name: Test Lovelace editor interactions (Node)
         run: node --test tests/test_weekly_editor.mjs
 
+  validate-hacs:
+    name: Validate HACS repository
+    # HACS requires GitHub repository topics. The connected code editor
+    # cannot change repository Settings → Topics; keep the validation
+    # visible, but do not block the stable release of a working integration.
+    # Remove continue-on-error once the owner adds the required topics.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: Validate Home Assistant integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Home Assistant hassfest
+        uses: home-assistant/actions/hassfest@master
+
   stable-release:
-    name: Publish stable v1.2.0
-    needs: tests
+    name: Publish stable v1.3.0
+    needs: [tests, hassfest]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Publish immutable v1.2.0 after successful main CI
+      - name: Publish immutable v1.3.0 after all validations pass
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -49,14 +72,14 @@ jobs:
           version = json.loads(
               Path("custom_components/ariston_cube/manifest.json").read_text()
           )["version"]
-          assert version == "1.2.0", "Refusing mismatched stable release"
+          assert version == "1.3.0", "Refusing incorrect stable release version"
           PY
-          if gh release view v1.2.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "v1.2.0 already exists; preserving immutable tag"
+          if gh release view v1.3.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.3.0 already exists; preserve existing tag"
             exit 0
           fi
-          gh release create v1.2.0 \
+          gh release create v1.3.0 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Ariston Cube 1.2.0 — Cube S + gas Energia automatico" \
-            --notes-file docs/releases/v1.2.0.md
+            --title "Ariston Cube 1.3.0 — Lovelace reattiva, Cube S e gas automatico" \
+            --notes-file docs/releases/v1.3.0.md

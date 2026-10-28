@@ -70,7 +70,12 @@ class AristonDhwWaterHeater(AristonEntity, WaterHeaterEntity):
 
     @property
     def target_temperature(self) -> float | None:
-        return as_temperature((self.coordinator.data or {}).get("DhwTemp"))
+        return as_temperature((getattr(self.coordinator, "display_data", self.coordinator.data) or {}).get("DhwTemp"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
+        return feedback("DhwTemp")
 
     @property
     def current_temperature(self) -> float | None:

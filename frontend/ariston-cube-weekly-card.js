@@ -170,7 +170,7 @@
     }
     get _canEdit() {
       const services = this.homeAssistant?.services?.ariston_cube || {};
-      return Boolean(services.preview_weekly_slice && services.test_write_weekly_slice
+      return Boolean(services.preview_weekly_change && services.write_weekly_change
         && typeof this.homeAssistant.callService === "function");
     }
     get _canAddRemove() {
@@ -289,13 +289,9 @@
       this.render();
       try {
         const service = operation === "clone"
-          ? "preview_weekly_clone"
-          : operation === "move" ? "preview_weekly_slice" : "preview_weekly_change";
+          ? "preview_weekly_clone" : "preview_weekly_change";
         const data = operation === "clone" ? {
           source_day: payload.source_day, destinations: payload.destinations
-        } : operation === "move" ? {
-          day: payload.day, from_time: payload.from_time,
-          to_time: payload.to_time
         } : payload;
         const result = await this._invoke(service, data);
         const cloneValid = operation === "clone"
@@ -314,7 +310,7 @@
           });
         const ordinaryValid = operation !== "clone"
           && result.weekday === DAYS[this.dayIndex][0]
-          && (operation === "move" || result.operation === operation)
+          && result.operation === operation
           && Array.isArray(result.before) && Array.isArray(result.after);
         if (result.status !== "preview_only_no_cloud_write"
             || result.changed !== true
@@ -374,14 +370,9 @@
       try {
         const payload = this._changePayload();
         const service = payload.operation === "clone"
-          ? "clone_weekly_days"
-          : payload.operation === "move"
-            ? "test_write_weekly_slice" : "write_weekly_change";
+          ? "clone_weekly_days" : "write_weekly_change";
         const data = payload.operation === "clone" ? {
           source_day: payload.source_day, destinations: payload.destinations
-        } : payload.operation === "move" ? {
-          day: payload.day, from_time: payload.from_time,
-          to_time: payload.to_time
         } : payload;
         const result = await this._invoke(service, {
           ...data, expected_fingerprint: fingerprint, confirm: true

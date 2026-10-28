@@ -35,6 +35,10 @@ def _setup_module(monkeypatch):
     const_module.Platform = Platforms
     helpers_module = types.ModuleType("homeassistant.helpers")
     helpers_module.__path__ = []
+    config_validation_module = types.ModuleType("homeassistant.helpers.config_validation")
+    config_validation_module.config_entry_only_config_schema = (
+        lambda domain: lambda data: data
+    )
     clients_module = types.ModuleType("homeassistant.helpers.aiohttp_client")
     clients_module.async_get_clientsession = lambda hass: "shared-test-session"
     clients_module.async_create_clientsession = (
@@ -89,6 +93,7 @@ def _setup_module(monkeypatch):
         "homeassistant": hass_module,
         "homeassistant.const": const_module,
         "homeassistant.helpers": helpers_module,
+        "homeassistant.helpers.config_validation": config_validation_module,
         "homeassistant.helpers.aiohttp_client": clients_module,
         "_ariston_cube_setup_test": package,
         "_ariston_cube_setup_test.api": api_module,
@@ -179,9 +184,9 @@ def test_release_marker_and_diagnostics_format_are_consistent():
     manifest = json.loads((ROOT / "manifest.json").read_text())
     source = (ROOT / "__init__.py").read_text()
     diag = (ROOT / "diagnostics.py").read_text()
-    assert manifest["version"] == "1.2.0"
-    assert "Ariston Cube 1.2.0 starting" in source
-    assert '"version": "1.2.0"' in diag
+    assert manifest["version"] == "1.3.0"
+    assert "Ariston Cube 1.3.0 starting" in source
+    assert '"version": "1.3.0"' in diag
 
 
 def test_unload_stops_automatic_energy_timer_and_clears_callback(monkeypatch):

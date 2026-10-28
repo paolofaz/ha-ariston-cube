@@ -1,191 +1,179 @@
-> **STABILE v1.2.0 — Cube S + gas Energia automatico.** Mantiene tutte le funzioni dell'editor settimanale stabile 1.1.0 (fasce, orari da 15 minuti e **Clona giorno**) e aggiunge la correzione automatica dell'attribuzione oraria dei consumi Ariston. Ogni due ore alle **:15 delle ore dispari locali**, dopo verifica dei bucket e delle statistiche, corregge **solo** i valori idonei. Nessun retry automatico, nessuna modifica ai sensori gas cumulativi, agli unique ID, al ledger Smc o agli offset. La correzione 14–16 del 28 ottobre 2026 è stata confermata automaticamente da Recorder su entrambi i sensori. [Note della release stabile](docs/releases/v1.2.0.md).
+# Ariston Cube · Home Assistant
+
+[![Release](https://img.shields.io/github/v/release/paolofaz/ha-ariston-cube?label=versione%20stabile)](https://github.com/paolofaz/ha-ariston-cube/releases/latest)
+[![CI](https://github.com/paolofaz/ha-ariston-cube/actions/workflows/ci.yml/badge.svg)](https://github.com/paolofaz/ha-ariston-cube/actions/workflows/ci.yml)
+[![MIT License](https://img.shields.io/github/license/paolofaz/ha-ariston-cube)](LICENSE)
+
+**Controllo del termostato Ariston Cube S, programmazione settimanale e consumi gas in Home Assistant.** Integrazione comunitaria per **Ariston CLAS ONE 30L + Cube S**, collegata ad Ariston NET.
+
+> **Versione stabile: 1.3.0.** Comandi Lovelace reattivi, editor settimanale completo, clonazione dei giorni e allineamento automatico delle statistiche Energia del gas. Funzionalità verificate sul Cube S reale; il comportamento può variare con altri modelli o versioni cloud.
 >
-> **Diagnostica gas, solo lettura:** `ariston_cube.inspect_automatic_energy_hour_alignment` mostra gli ultimi cicli; `ariston_cube.inspect_energy_hour_alignment` consente di verificare una specifica ora. Per periodi già corretti dall'automatismo, non usare `apply_energy_hour_alignment` manualmente. Le versioni v1.1.0 e v1.1.1-rc.2 restano disponibili nei rispettivi tag.
->
-> Il miglioramento della reattività di Lovelace è una futura modifica separata: questa release mantiene il percorso di conferma cloud per i comandi di temperatura e modalità.
+> **Progetto indipendente, non ufficiale Ariston.** Le API cloud potrebbero cambiare. L'interfaccia può mostrare temporaneamente un comando richiesto prima che la caldaia lo confermi.
 
-# Ariston Cube for Home Assistant
+**English:** Community Home Assistant integration for Ariston CLAS ONE 30L / Cube S. Includes responsive controls with cloud confirmation and rollback, a weekly schedule editor, multi-day cloning, separate heating/DHW gas totals, and guarded automatic Energy statistics alignment. See the [English quick guide](docs/README.en.md).
 
-**Stable version 1.2.0** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
+## Funzioni
 
-Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, editable Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
-
-> **Disclaimer:** This is an independent community project, not an official Ariston integration. The Ariston cloud endpoints used here are not guaranteed to remain stable. The hardware and Home Assistant version above are the verified reference setup, not a claim of compatibility with every model or release.
-
-## Highlights
-
-- **Cube S climate entity:** room temperature, heating target, OFF, HEAT (manual), and AUTO (existing weekly program).
-- **Separate AUTO / Manuale selector:** operates on the same Cube S zone mode as the climate entity. No independent scheduler is created.
-- **Boiler operating mode selector:** winter, summer, and off, separate from the zone's AUTO/manual setting.
-- **DHW water heater entity:** temperature setpoint control from **36 to 60 °C**, in **1 °C** increments, with a separate DHW Comfort switch.
-- **Heating presets:** dedicated number entities for Comfort and Economy temperatures.
-- **Telemetry:** heating request, boiler flame, heating flow and target temperatures, optional outdoor temperature, heating pressure, and other available readings.
-- **Two persistent gas totals:** one for central heating and one for DHW, based on the cloud's physical **standard cubic meter (Smc)** readings.
-- **Read-only weekly schedule:** a sensor, calendar view, and optional Lovelace timeline card.
-- **Native DHW controls:** use the Home Assistant water heater entity and the independent Comfort switch.
-
-### Home Assistant entities
-
-| Domain | Purpose |
+| Area | Funzionalità |
 | --- | --- |
-| `climate` | Cube S thermostat, temperature and OFF/HEAT/AUTO |
-| `water_heater` | DHW temperature target only |
-| `select` | Boiler winter/summer/off and Cube S AUTO/Manuale |
-| `switch` | DHW Comfort and automatic thermoregulation |
-| `number` | Heating Comfort/Economy setpoints |
-| `binary_sensor` | Heating request and boiler flame |
-| `sensor` | Temperatures, pressure, read-only weekly program and two cumulative Smc totals |
-| `calendar` | Read-only Cube S weekly heating schedule |
+| **Clima Cube S** | Temperatura ambiente, temperatura obiettivo, OFF / HEAT (Manuale) / AUTO (programma settimanale originale) |
+| **Comandi reattivi** | Cambio immediato nella vista Lovelace, lettura cloud di conferma, ripristino in caso di errore |
+| **Riscaldamento** | Temperature Comfort / Economy, selettore AUTO / Manuale, modalità generale della caldaia, termoregolazione |
+| **Acqua calda** | Entità `water_heater` per target ACS, switch separato Comfort ACS |
+| **Programma Cube S** | Sensore, calendario, scheda settimanale: sposta, aggiungi, elimina fasce e **Clona giorno** |
+| **Gas ed Energia** | Due sensori cumulativi Smc (riscaldamento / ACS), attribuzione automatica corretta delle fasce biorarie |
+| **Diagnostica** | Stato degli ultimi cicli automatici e ispezione in **sola lettura** delle statistiche di un'ora |
 
-Version 1.0.0 removed the former daily and two-hour Smc diagnostic sensors and the obsolete DHW number control. The cumulative gas entities retain their existing unique IDs; the cleanup targets only obsolete **Ariston Cube** entity registry entries belonging to the configured installation. It does not delete Recorder history or long-term statistics.
+Non è necessario sostituire la programmazione interna del Cube S: **AUTO continua a seguire quella vera**.
 
-## Installation with HACS
+## Compatibilità e prerequisiti
 
-1. In HACS, add `https://github.com/paolofaz/ha-ariston-cube` as a **custom repository** of type **Integration**, if it is not already installed.
-2. Install or update **Ariston Cube**. For a future 1.0.1 release, select `v1.0.1` once it is published.
-3. Restart Home Assistant and use **Settings → Devices & services** to add or review the Ariston Cube integration.
-4. Select your boiler through the integration's configuration flow.
+- **Hardware verificato:** Ariston CLAS ONE 30L con termostato Cube S, zona 1.
+- **Home Assistant:** versione minima dichiarata a HACS **2026.10.0**; collaudata su **Home Assistant Core/Container 2026.10.4**.
+- **HACS** per installazione e aggiornamenti (oppure installazione manuale).
+- Account Ariston NET funzionante e accesso Internet per le API cloud.
 
-This maintenance branch is based on stable 1.0.0. **No 1.0.1 release has been published yet; `main` stays on 1.0.0.** Do not retarget the existing stable tag.
+Non viene garantito il supporto di altri modelli o installazioni multizona. Il gas è conteggiato dalle letture fisiche esposte dal cloud, non derivato da una conversione kWh → m³.
 
-**When updating an existing installation, preserve the Ariston Cube config entry, the Home Assistant Recorder database and all integration files under `.storage`.** They include persistent gas-meter checkpoints and historical Energy data. Keep any pre-migration database backup.
+## Installazione
 
-## Heating controls: AUTO, Manuale and OFF
+### Con HACS
 
-The Cube S `climate` entity exposes three familiar heating modes:
+1. In **HACS → menu ⋮ → Repository personalizzati**, aggiungi
+   `https://github.com/paolofaz/ha-ariston-cube` come **Integrazione**. Finché HACS non approva l'inclusione nel catalogo predefinito, usa il repository personalizzato.
+2. Installa **Ariston Cube**, scegliendo la release stabile più recente (**v1.3.0**).
+3. **Riavvia Home Assistant**.
+4. In **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**, cerca **Ariston Cube**; inserisci le credenziali Ariston NET e seleziona la caldaia.
 
-| Climate mode | Cube S zone mode | Meaning |
-| --- | --- | --- |
-| OFF | `ZoneMode=0` | Heating zone disabled |
-| HEAT | `ZoneMode=2` | Manual heating |
-| AUTO | `ZoneMode=3` | Follow the Cube S's stored weekly schedule |
+**Aggiornamento dalla 1.2.0 o da una RC:** aggiorna e riavvia. **Non eliminare la configurazione**, la cartella `.storage` o il database Recorder; nessun reset dei sensori gas è necessario. I cambiamenti di programma salvati sul Cube S restano nel cloud.
 
-The additional **“Modalità riscaldamento”** select offers **AUTO** and **Manuale** only. It calls the same verified zone-mode command and read-back mechanism as the climate entity, so both reflect the cloud-reported setting. It is intentionally unavailable when the plant is in summer/off mode, the zone is disabled/in an unsupported mode, or Ariston does not report both options.
+### Installazione manuale
 
-The **“Modalità caldaia”** select controls the whole boiler's winter/summer/off mode independently. The **automatic thermoregulation** switch is a different feature; it does not switch between the Cube S weekly program and manual heating.
+Copia l'intera directory `custom_components/ariston_cube/` sotto `<config>/custom_components/ariston_cube/` di Home Assistant, poi riavvia e configura l'integrazione. Mantieni `www/`, `strings.json` e `translations/` all'interno della cartella dell'integrazione.
 
-Heating setpoint changes through the climate entity use the existing guarded manual-mode command. Changes to the stored Comfort and Economy presets are available through their separate number entities.
+## Comandi Lovelace: immediati ma verificati
 
-### What does the flame sensor measure?
+Quando cambi **AUTO ↔ Manuale**, una temperatura o una modalità della caldaia, Lovelace mostra subito il valore richiesto, mentre il cloud Ariston riceve il comando.
 
-`IsFlameOn` is reported at **plant level** (zone 0): it means that the boiler burner is active, **not necessarily that space heating is active**. The burner may also be operating for DHW.
+Durante l'attesa le entità di controllo espongono:
 
-The separate `ZoneHeatRequest` signal refers to heating zone 1. Home Assistant's `climate.hvac_action` reports `heating` when the zone requests heat **and** the burner reports a flame. This is a useful heating status, but is not an independent measurement of which circuit receives the flame. There is no inferred “DHW flame” sensor.
+```yaml
+ariston_comando_in_corso: true
+ariston_comando_esito: in_attesa
+```
 
-## Domestic hot water
+L'integrazione mantiene **lettura cloud fresca → un solo POST → rilettura di conferma**. Il dato provvisorio non altera lo snapshot originale, i sensori di misura o il gas.
 
-The `water_heater` entity supports **target temperature only**: it does not expose an operation-mode selector or artificial on/off commands. The temperature control writes `DhwTemp`, respecting both local and cloud-supplied limits; it uses a fresh read and confirms the result after the command.
+| Esito | Cosa si vede |
+| --- | --- |
+| `confermato` | Il server ha confermato il valore: l'interfaccia mostra il dato verificato. |
+| `rifiutato` | L'interfaccia ritorna al valore precedente verificato; il comando non è accettato. |
+| `non_confermato` | Timeout o esito incerto: ritorna l'ultimo stato verificato. **Non ritenta automaticamente.** |
 
-Actual stored-water temperature is displayed only if `DhwStorageTemperature` is available from the boiler.
+Un secondo comando contemporaneo viene rifiutato per prevenire sovrapposizioni. Il cambiamento fisico sul Cube S può essere ritardato rispetto alla visualizzazione in Lovelace.
 
-**DHW Comfort remains a separate switch.** It is not equivalent to switching the boiler on or off. If the cloud reports a timed Comfort state that cannot be safely mapped to a simple boolean, the integration does not invent an on/off value.
+## Editor settimanale Cube S
 
-Automations previously using the removed DHW number entity should instead call `water_heater.set_temperature`.
+La scheda `ariston-cube-weekly-card` permette di modificare il **programma reale** memorizzato nel cloud Ariston:
 
-### Native DHW controls
+- **Sposta orario:** sposta un cambio Comfort/Economy esistente con passi da 15 minuti.
+- **Aggiungi fascia:** indica ora iniziale, ora finale e preset, con ripristino del preset precedente alla fine.
+- **Elimina fascia:** rimuove un cambio esistente e gestisce i confini ridondanti.
+- **Clona giorno:** copia un giorno sorgente su uno o più giorni destinatari scelti.
 
-The custom `ariston-cube-acs-card` was retired in the **1.0.1 maintenance branch**.
-Use the native `water_heater` entity and the separate DHW Comfort switch.
-The standard Home Assistant device page may display **"Off"** from the
-read-only cloud `DhwMode`; the underlying DHW setpoint is still configurable.
-We intentionally do not fake an operating mode to suppress that label.
+Ogni modifica richiede **Anteprima → verifica prima/dopo → conferma esplicita**. L'integrazione confronta il fingerprint dell'intero programma, esegue al massimo **un POST** e rilegge **tutti i sette giorni**. Se l'esito è ambiguo, verifica nell'app Ariston prima di ulteriori modifiche.
 
-**Upgrading from 1.0.0:** remove existing manual `custom:ariston-cube-acs-card`
-cards from your dashboards. If the old ACS script remains registered in
-Settings → Dashboards → Resources, remove that entry manually. Only the
-Cube S weekly card is served and registered in 1.0.1. Existing dashboard
-layouts and resources are not deleted by the integration.
+### Aggiungere la scheda alla dashboard
 
-### Cube S weekly Lovelace card
+```yaml
+type: custom:ariston-cube-weekly-card
+entity: sensor.INSERISCI_IL_TUO_SENSORE_PROGRAMMA_SETTIMANALE
+title: Fasce riscaldamento Cube S
+```
 
-The bundled `ariston-cube-weekly-card` remains available and is currently
-read-only. It can be adapted for verified editing in a future release.
+Sostituisci l'ID nell'esempio con quello reale disponibile in **Strumenti per sviluppatori → Stati**. Non viene creato automaticamente un nome uguale per tutte le installazioni.
 
-In **Storage** dashboard mode, its module resource is registered automatically.
-For manual **YAML** resources, add:
+La risorsa JavaScript si registra automaticamente nelle dashboard **Storage**. Per dashboard YAML, aggiungi:
 
 ```yaml
 resources:
-  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.0.1
+  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.3.0
     type: module
 ```
 
-Update any older resource URL query version and reload your dashboard.
+Dopo un aggiornamento esegui un refresh completo della pagina se il browser conserva la vecchia scheda. [Guida alla scheda settimanale](frontend/README.md).
 
-## Gas consumption and Energy dashboard
+## Gas Smc e dashboard Energia
 
-The two cumulative gas sensors use the **physical Smc** values in Ariston's `asPhysicalUnit.histogramData`, **not an estimated conversion from kWh**.
+Ariston NET espone i consumi del riscaldamento e dell'ACS come due **cumulativi fisici Smc**. Sono sensori separati con `device_class: gas`, `state_class: total` e unità `m³` (metri cubi standard).
 
-In Home Assistant, the sensors use:
+I dati Ariston arrivano in bucket **di due ore**. L'integrazione li acquisisce intorno ai minuti **:10**, con secondo tentativo alle **:40**, delle ore pari. Se Home Assistant registra l'incremento nell'ora sbagliata, alle **:15 dell'ora dispari successiva** l'automatismo corregge unicamente l'attribuzione statistica.
 
-- `device_class: gas`
-- `state_class: total`
-- `unit_of_measurement: m³` (representing standard cubic meters, Smc)
+| Esempio (ora italiana) | Intervallo |
+| --- | --- |
+| Consumo pubblicato dal cloud | **14:00–16:00** |
+| Ora inizialmente attribuita da HA | 16:00–17:00 |
+| Ora corretta dall'integrazione alle 17:15 | **15:00–16:00** |
 
-The initial cumulative reading may include part of the previous day and the current day. **It is the initial point of this integration's series, not a lifetime meter reading for the boiler.**
+L'allineamento è stato verificato sul campo, con **0,50 Smc riscaldamento + 0,03 Smc ACS** correttamente nell'ora 15–16, zero in 16–17, e altri periodi consecutivi confermati.
 
-To prevent double counting, the integration stores a checkpoint for each **local calendar day + heating/DHW category + two-hour interval** in Home Assistant's `.storage`. Re-reading the same interval does not add it twice, while reported corrections change the cumulative total by the difference. The recorded behavior across midnight has been verified against Ariston's `CurrentDay` and `PreviousDay` reports.
+**Protezioni:** verifica del bucket, fingerprint, stato e somme Recorder, salvataggio singolo per sensore, verifica della scrittura, nessun retry automatico dopo un esito incerto. Se mancano dati o il consumo è zero / già allineato, non forza alcuna correzione. Non recupera automaticamente le fasce perse durante un'interruzione.
 
-Cloud reads are scheduled at **:10 and :40 after each even-numbered hour**, with an initial refresh and a six-hour fallback. The two-hour data is still used internally even though the former standalone two-hour sensors have been removed.
+**Non modificare gli ID dei due sensori cumulativi, non cancellare gli offset o il ledger e non azzerare Recorder.** La 1.3.0 conserva lo stato e la storia Energia delle versioni precedenti.
 
-If the cloud data is incomplete or a checkpoint becomes unreliable, a sensor may become unavailable rather than report invented usage. **Do not delete the gas checkpoint files under `.storage`.** Recovery from downtime exceeding the cloud's available history remains a future hardening task.
+## Azioni in Strumenti per sviluppatori
 
-### Existing Energy history
+Sono esposte **solo sei azioni**, quattro per il programma Cube S e due diagnostiche gas in sola lettura:
 
-The reference installation migrated its prior **m³** Energy statistics into the new cumulative sensor histories using a separately backed-up, manually verified SQLite procedure. **Ariston Cube does not migrate, reset or rewrite Recorder, `statistics_meta` or Energy dashboards.**
+| Azione `ariston_cube.*` | Scopo |
+| --- | --- |
+| `preview_weekly_change` | Anteprima sposta / aggiungi / elimina |
+| `write_weekly_change` | Salva la modifica confermata |
+| `preview_weekly_clone` | Anteprima di clonazione |
+| `clone_weekly_days` | Clonazione confermata |
+| `inspect_automatic_energy_hour_alignment` | Ultimi cicli automatici del gas (lettura) |
+| `inspect_energy_hour_alignment` | Statistiche di una singola ora (lettura) |
 
-Do not repeat a database migration on an installation that has already been migrated. Before removing any older integration on other installations, check all dashboards, automations, templates and historical statistics. Keep database backups.
+Le vecchie azioni `TEST`, i probe e le scritture manuali di statistiche gas non sono più pubblicati. Il gas continua a funzionare autonomamente.
 
-## Cloud architecture and diagnostics
+Per controllare gli ultimi cicli, **senza scrivere nulla**:
 
-Ariston Cube uses two independent authenticated cloud sessions:
+```yaml
+action: ariston_cube.inspect_automatic_energy_hour_alignment
+```
 
-- **Mobile `/api/v2` interface:** boiler/zone values, controls and Cube S schedule readings.
-- **Web `/R2` interface:** physical Smc reports and DHW Comfort controls.
+Per ispezionare un'ora statistica, usa il **timestamp UTC** dell'ora italiana interessata:
 
-Mobile bearer-token authentication cannot be reused as web-portal cookie/CSRF authentication. The sessions are deliberately isolated. Diagnostics report safe schema information rather than credentials or full cloud responses.
+```yaml
+action: ariston_cube.inspect_energy_hour_alignment
+data:
+  target_start: "2026-10-28T14:00:00+00:00"
+```
 
-## Scope and roadmap
+## Risoluzione problemi
 
-**Included since 1.0.0:** monitoring, verified heating/DHW controls, persistent gas totals, and reading the real Cube S weekly timetable.
+| Sintomo | Verifica |
+| --- | --- |
+| L'integrazione non appare | Riavvia Home Assistant dopo l'installazione; verifica il percorso `custom_components/ariston_cube` |
+| Un comando torna indietro | Controlla `ariston_comando_esito`; se `non_confermato`, verifica il valore nell'app Ariston prima di riprovare |
+| La scheda è vecchia o non modifica | Aggiorna la risorsa JS a `?v=1.3.0`, ricarica la dashboard e verifica che le azioni siano registrate |
+| Un ciclo gas viene saltato | Controlla `inspect_automatic_energy_hour_alignment`; assenza di dati, Recorder non pronto e bucket zero non devono generare scritture forzate |
+| Consumi gas storici | Conserva Recorder e i checkpoint `.storage`; non reinstallare da zero per correggere le statistiche |
 
-**Not included:** editing or saving Cube S weekly time bands. That work is isolated in the experimental `feat/cube-s-weekly-schedule-editor` branch. Any future write operation requires an independently verified endpoint/payload, a fresh-source comparison, explicit confirmation, a read-back check and a recovery strategy. Experimental code must not be installed as the stable 1.0.0.
+In caso di anomalia, apri una [segnalazione GitHub](https://github.com/paolofaz/ha-ariston-cube/issues) indicando versione di Home Assistant, versione dell'integrazione, modello della caldaia e log **senza password, token o dati privati**.
 
-Additional hardening is planned for prolonged cloud or Home Assistant outages affecting gas-meter history.
+## Sviluppo e contributi
 
-## Development
+Codice Python e JavaScript, licenza [MIT](LICENSE). Le modifiche sono verificate in GitHub Actions con test Python, test della scheda Lovelace (Node), [HACS validation](https://github.com/hacs/action) e [hassfest](https://github.com/home-assistant/actions/tree/master/hassfest).
 
 ```bash
 python -m pip install pytest aiohttp
 python -m compileall -q custom_components/ariston_cube tests
 python -m pytest -q
+node --test tests/test_weekly_editor.mjs
 ```
 
-Offline tests check data parsing, safety checks and entity contracts; they do **not** replace testing against a real boiler.
-
-Issues and source code: https://github.com/paolofaz/ha-ariston-cube
-
-
-### Testing the experimental Lovelace editor
-
-The bundled `custom:ariston-cube-weekly-card` is the **same card** as before.
-Tap **Modifica fasce** or an individual weekday to reveal an inline editor.
-Only moving an *existing, non-midnight start boundary* is supported in this
-first UI version; adding/removing periods and changing presets are deliberately
-out of scope until separately tested. One edit is attempted at a time.
-
-```yaml
-type: custom:ariston-cube-weekly-card
-entity: sensor.YOUR_ACTUAL_WEEKLY_PROGRAM_ENTITY
-title: Fasce riscaldamento Cube S
-```
-
-With a Storage dashboard, the integration upgrades the registered weekly
-resource to `/ariston_cube/ariston-cube-weekly-card.js?v=1.1.0-rc.6`.
-If the browser still renders the old card, hard-refresh the dashboard.
-YAML resource mode requires updating the resource URL manually. If reverting
-to stable **1.0.1**, also revert the weekly resource URL to `?v=1.0.1` in
-Settings → Dashboards → Resources if the old editor stays cached.
-
-Reinstalling a stable release does **not** restore any Cube S programme
-modified during experiments: review the actual Ariston schedule separately.
+- [Novità della 1.3.0](docs/releases/v1.3.0.md)
+- [Documentazione installazione nel catalogo HACS](docs/HACS_PUBLICATION.md)
+- [Issue tracker](https://github.com/paolofaz/ha-ariston-cube/issues)
+- [Release](https://github.com/paolofaz/ha-ariston-cube/releases)

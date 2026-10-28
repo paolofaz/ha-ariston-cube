@@ -29,7 +29,12 @@ class AristonAutomaticThermoregulation(AristonEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        return as_boolean(self.coordinator.data.get("AutomaticThermoregulation"))
+        return as_boolean(getattr(self.coordinator, "display_data", self.coordinator.data).get("AutomaticThermoregulation"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
+        return feedback("AutomaticThermoregulation")
 
     @property
     def available(self) -> bool:

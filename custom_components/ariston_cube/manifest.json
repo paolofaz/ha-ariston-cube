@@ -1,13 +1,25 @@
 {
   "domain": "ariston_cube",
   "name": "Ariston Cube",
-  "version": "1.2.0",
+  "after_dependencies": [
+    "lovelace",
+    "recorder"
+  ],
+  "categories": [
+    "climate.thermostats_heating",
+    "energy.meters_monitoring"
+  ],
+  "codeowners": [
+    "@paolofaz"
+  ],
   "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http"
+  ],
   "documentation": "https://github.com/paolofaz/ha-ariston-cube",
+  "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/paolofaz/ha-ariston-cube/issues",
   "requirements": [],
-  "dependencies": ["frontend", "http"],
-  "after_dependencies": ["lovelace"],
-  "codeowners": [],
-  "iot_class": "cloud_polling"
+  "version": "1.3.0"
 }

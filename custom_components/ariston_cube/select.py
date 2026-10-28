@@ -28,7 +28,12 @@ class AristonPlantModeSelect(AristonEntity, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        return _BY_CODE.get(enum_code(self.coordinator.data.get("PlantMode")))
+        return _BY_CODE.get(enum_code(getattr(self.coordinator, "display_data", self.coordinator.data).get("PlantMode")))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
+        return feedback("PlantMode")
 
     @property
     def available(self) -> bool:
@@ -65,8 +70,13 @@ class AristonZoneProgrammeSelect(AristonEntity, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        data = self.coordinator.data or {}
+        data = getattr(self.coordinator, "display_data", self.coordinator.data) or {}
         return _ZONE_PROGRAM_BY_CODE.get(enum_code(data.get("ZoneMode")))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
+        return feedback("ZoneMode")
 
     @property
     def available(self) -> bool:
