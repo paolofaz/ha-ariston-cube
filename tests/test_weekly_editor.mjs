@@ -400,9 +400,9 @@ test("two verified changes can be staged sequentially without closing editor", a
   card.toTime = "06:15";
   await card._previewChange();
   assert.ok(card.preview);
-  assert.equal(calls.filter((x) => x[1] === "preview_weekly_change").length, 1);
+  assert.equal(calls.filter((x) => x[1] === "preview_weekly_change").length, 2);
   await card._saveChange();
-  assert.equal(calls.filter((x) => x[1] === "write_weekly_change").length, 1);
+  assert.equal(calls.filter((x) => x[1] === "write_weekly_change").length, 2);
   assert.equal(card.blocked, false);
   assert.equal(card.preview, null);
 });
