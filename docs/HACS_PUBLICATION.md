@@ -15,17 +15,20 @@ discrezione dei manutentori HACS.
 - [x] Manifest HA, `hacs.json`, README, traduzioni, issue tracker,
   licenza MIT.
 - [x] Release stabile con tag immutabile e note ufficiali.
-- [x] Job GitHub Actions: test Python + JavaScript, validazione HACS,
-  validazione hassfest. **Controllare che siano tutti verdi sulla
-  versione finale e senza ignore**.
+- [x] Job GitHub Actions: test Python + JavaScript e hassfest.
+- [ ] **HACS validation deve passare senza errori o ignore.** Il test
+  attuale segnala che mancano i **repository topics** nelle
+  impostazioni GitHub. L'automatismo HACS rimane visibile in CI
+  ma non blocca la release stabile finché il proprietario non
+  completa questa impostazione.
 - [ ] GitHub repository: verificare che la descrizione sia informativa
   e configurare alcuni *topics* (es. `home-assistant`, `hacs`,
   `ariston`, `cube-s`, `heating`) nelle impostazioni GitHub.
-- [ ] Branding: aggiungere una icona quadrata 256×256 compatibile
-  in `custom_components/ariston_cube/brand/icon.png`, oppure
-  verificare il brand dedicato nel repository home-assistant/brands.
-  Usare artwork originale o autorizzato, non simboli ufficiali
-  Home Assistant.
+- [ ] **Branding per la candidatura al catalogo:** la validazione HACS
+  sul repository attualmente supera il controllo brands, ma verifica
+  che la PR `hacs/default` accetti l'icona del progetto. Se serve,
+  aggiungi `custom_components/ariston_cube/brand/icon.png` originale
+  o autorizzata, con dimensioni 256×256, non loghi ufficiali HA.
 - [ ] Dopo le verifiche precedenti, il proprietario deve creare
   un fork personale di `hacs/default`, un branch da `master` e
   inserire **`paolofaz/ha-ariston-cube`** nel file `integration`,
