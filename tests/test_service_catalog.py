@@ -76,5 +76,6 @@ def test_editor_has_no_legacy_test_action_dependencies():
         assert name in bundle
     for name in DEPRECATED:
         assert name not in bundle
-    assert 'operation === "move"' in bundle
+    assert 'this.operation = "move"' in bundle
+    assert 'if (kind === "move")' in bundle
     assert "expected_fingerprint: fingerprint, confirm: true" in bundle
