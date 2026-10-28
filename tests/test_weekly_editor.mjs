@@ -587,7 +587,7 @@ test("selection checkboxes include six targets but never the source", () => {
   wed.listeners.change();
   fri.checked = true;
   fri.listeners.change();
-  assert.deepEqual(card.cloneTargets, [2, 4]);
+  assert.deepEqual(Array.from(card.cloneTargets), [2, 4]);
   assert.equal(card._changeIsValid(), true);
 });
 
@@ -603,7 +603,7 @@ test("changing clone destinations or source invalidates preview approval", async
   await card._saveChange();
   assert.equal(calls.length, 1);
   card._setDay(1); // Tuesday
-  assert.deepEqual(card.cloneTargets, []);
+  assert.deepEqual(Array.from(card.cloneTargets), []);
   assert.equal(card.preview, null);
 });
 
