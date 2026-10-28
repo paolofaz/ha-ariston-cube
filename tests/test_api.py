@@ -767,3 +767,118 @@ def test_cube_s_add_remove_full_week_mismatch_does_not_retry():
     assert [method for method, _, _ in session.calls] == [
         "POST", "GET", "POST", "GET"
     ]
+
+
+def test_cube_s_clones_three_days_in_one_post_and_confirms_complete_week():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    from _ariston_cube_testpkg.weekly_clone import build_clone_weekly_days
+    original = _weekly_write_fixture()
+    original["ChZn1"]["device_features"] = {"read_only_metadata": [1, 2]}
+    fingerprint = weekly_read_fingerprint(original)
+    targets = [3, 5, 0]
+    body, expected, proposal = build_clone_weekly_days(
+        original, 1, targets, fingerprint
+    )
+    assert proposal["destination_weekdays"] == ["Domenica", "Mercoledì", "Venerdì"]
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(original),
+        Response({"ok": True}),
+        Response({"ChZn1": {"plans": body["plans"]}}),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        return await client.async_clone_weekly_days(
+            "GW123", 1, targets, fingerprint
+        )
+
+    result = run(scenario())
+    assert result["status"] == "confirmed_by_fresh_cloud_read"
+    assert result["changed"] is True
+    assert result["operation"] == "clone"
+    assert result["changed_weekdays"] == ["Domenica"]
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET"
+    ]
+    assert session.calls[2][2]["json"] == body
+    assert sum(1 for method, url, _ in session.calls if (
+        method == "POST" and "/timeProgs/" in url
+    )) == 1
+    assert expected["days"]["Domenica"] == expected["days"]["Lunedì"]
+
+
+def test_cube_s_clone_rejects_stale_fingerprint_with_zero_schedule_posts():
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.CommandRejected, match="changed since preview"):
+            await client.async_clone_weekly_days("GW123", 1, [0, 6], "0" * 64)
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "GET"]
+
+
+def test_cube_s_clone_ambiguous_post_failure_is_not_retried():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response(status=400),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.AristonError):
+            await client.async_clone_weekly_days(
+                "GW123", 1, [0], weekly_read_fingerprint(raw)
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST"
+    ]
+
+
+def test_cube_s_clone_unconfirmed_readback_is_not_retried():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response({"ok": True}),
+        Response(raw),  # existing programme still visible after one POST
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.AristonResponseError, match="not confirmed"):
+            await client.async_clone_weekly_days(
+                "GW123", 1, [0], weekly_read_fingerprint(raw)
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET"
+    ]
+
+
+def test_cube_s_clone_all_same_days_rejected_before_post():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.CommandRejected, match="already match"):
+            await client.async_clone_weekly_days(
+                "GW123", 1, [2, 3, 4], weekly_read_fingerprint(raw)
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "GET"]
