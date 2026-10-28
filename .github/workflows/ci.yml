@@ -38,17 +38,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Publish v1.1.0-rc.5 (do not replace an existing tag)
+      - name: Publish v1.1.0-rc.6 (do not replace an existing tag)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.1.0-rc.5 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "v1.1.0-rc.5 already exists; not retargeting it"
+          if gh release view v1.1.0-rc.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.1.0-rc.6 already exists; not retargeting it"
             exit 0
           fi
-          gh release create v1.1.0-rc.5 \
+          gh release create v1.1.0-rc.6 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "Ariston Cube 1.1.0-rc.5 — Cube S Weekly Band Editor" \
-            --notes-file docs/releases/v1.1.0-rc.5.md
+            --title "Ariston Cube 1.1.0-rc.6 — Cube S Weekly Band Start/End and 15-Minute Fix" \
+            --notes-file docs/releases/v1.1.0-rc.6.md
