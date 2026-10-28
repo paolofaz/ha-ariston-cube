@@ -117,8 +117,15 @@ def build_weekly_change(
         raise ValueError("All seven original weekdays must be available")
 
     zone = raw["ChZn1"]
-    if set(zone) != {"plans"}:
-        raise ValueError("Unknown zone metadata; do not write a partial source")
+    # The live Cube S GET includes additional ChZn1 keys. The already field-
+    # tested rc.3 move command POSTs ONLY {"plans": ...} even when those
+    # keys exist, and validates every weekday on the subsequent GET.
+    #
+    # Keep the identical proven POST envelope for add/remove. Extra zone
+    # keys remain in the whole-zone fingerprint, so any concurrent change
+    # to them invalidates the preview; they are never silently stripped
+    # from the source or serialized into an unverified write schema.
+    # Unknown metadata *inside* plans/slices is still rejected below.
     plans = zone["plans"]
     for plan in plans:
         if not isinstance(plan, dict) or set(plan) != {"days", "slices"}:
