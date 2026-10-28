@@ -68,6 +68,7 @@ def load(monkeypatch):
     api.AristonClient = type("AristonClient", (), {})
     api.AristonAuthError = AuthError
     api.AristonError = CloudError
+    api.AristonResponseError = type("AristonResponseError", (CloudError,), {})
     commands = types.ModuleType(pkg_name + ".commands")
     commands.CommandRejected = CommandRejected
     const = types.ModuleType(pkg_name + ".const")
@@ -228,7 +229,7 @@ def test_rejected_command_rolls_back_and_does_not_leave_pending(monkeypatch):
 
 
 def test_uncertain_cloud_response_rolls_back_and_never_retries(monkeypatch):
-    mod, _, CloudError, _ = load(monkeypatch)
+    mod, HAError, CloudError, _ = load(monkeypatch)
 
     class Client:
         calls = 0
@@ -240,8 +241,9 @@ def test_uncertain_cloud_response_rolls_back_and_never_retries(monkeypatch):
     coord = make_coordinator(mod, Client())
 
     async def scenario():
-        with pytest.raises(CloudError):
+        with pytest.raises(HAError) as error:
             await coord.async_set_setpoint("ZoneComfortTemp", 21.5)
+        assert isinstance(error.value.__cause__, CloudError)
         assert coord.display_data["ZoneComfortTemp"]["value"] == 21.0
         assert coord.published[0][0]["ZoneComfortTemp"]["value"] == 21.5
         assert coord.command_feedback("ZoneComfortTemp")["ariston_comando_esito"] == "non_confermato"
@@ -342,3 +344,52 @@ def test_pending_overlay_does_not_mutate_gas_or_acquired_snapshot(monkeypatch):
     assert ledger == {"total_heating_smc": 845.724986, "total_dhw_smc": 263.631005}
     optimistic["ZoneMode"]["value"] = 99
     assert before["ZoneMode"]["value"] == 3
+
+
+def test_explicit_cloud_rejection_rolls_back_with_refused_status(monkeypatch):
+    mod, HAError, _, _ = load(monkeypatch)
+    from sys import modules
+
+    rejection = modules["_ariston_cube_optimistic_test.api"].AristonResponseError
+
+    class Client:
+        async def async_set_zone_mode(self, plant, mode):
+            raise rejection("Ariston refused zone mode")
+
+    coord = make_coordinator(mod, Client())
+
+    async def scenario():
+        with pytest.raises(HAError):
+            await coord.async_set_zone_mode(2)
+        assert coord.display_data["ZoneMode"]["value"] == 3
+        assert coord.command_feedback("ZoneMode")["ariston_comando_esito"] == "rifiutato"
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_request_clears_preview_and_prevents_retry(monkeypatch):
+    mod, _, _, _ = load(monkeypatch)
+    started = asyncio.Event()
+
+    class Client:
+        calls = 0
+
+        async def async_set_zone_mode(self, plant, mode):
+            self.calls += 1
+            started.set()
+            await asyncio.Future()
+
+    coord = make_coordinator(mod, Client())
+
+    async def scenario():
+        job = asyncio.create_task(coord.async_set_zone_mode(2))
+        await started.wait()
+        assert coord.display_data["ZoneMode"]["value"] == 2
+        job.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await job
+        assert coord.display_data["ZoneMode"]["value"] == 3
+        assert coord.command_feedback("ZoneMode")["ariston_comando_esito"] == "non_confermato"
+        assert coord.client.calls == 1
+
+    asyncio.run(scenario())
