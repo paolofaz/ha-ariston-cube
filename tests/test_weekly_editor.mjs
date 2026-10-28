@@ -103,10 +103,11 @@ function makeCard({enabled = true, approve = true, writeError = null, newEditor 
           after = [
             before[0], before[1],
             {minute: 720, time: "12:00", preset: "Economy"},
+            {minute: 780, time: "13:00", preset: "Comfort"},
             before[2],
           ];
         } else if (payload.operation === "remove") {
-          after = [before[0], before[2]];
+          after = [before[0]];
         } else throw new Error("Unexpected mutation");
         return {response: {
           status: "preview_only_no_cloud_write", weekday: "Lunedì",
@@ -243,6 +244,7 @@ test("adding a Comfort/Economy boundary requires preview and one write", async (
   card._toggleEdit(0);
   card.operation = "add";
   card.toTime = "12:00";
+  card.endTime = "13:00";
   card.preset = "Economy";
   assert.equal(card._changeIsValid(), true);
   await card._previewChange();
@@ -250,12 +252,16 @@ test("adding a Comfort/Economy boundary requires preview and one write", async (
   assert.equal(calls[0][1], "preview_weekly_change");
   assert.equal(calls[0][2].operation, "add");
   assert.equal(calls[0][2].to_time, "12:00");
+  assert.equal(calls[0][2].end_time, "13:00");
   assert.equal(calls[0][2].preset, "Economy");
-  assert.equal(card.preview.after.length, 4);
+  assert.equal(card.preview.after.length, 5);
+  assert.equal(card.preview.after[3].time, "13:00");
+  assert.equal(card.preview.after[3].preset, "Comfort");
   await card._saveChange();
   assert.equal(calls.length, 2);
   assert.equal(calls[1][1], "write_weekly_change");
   assert.equal(calls[1][2].operation, "add");
+  assert.equal(calls[1][2].end_time, "13:00");
   assert.equal(calls[1][2].expected_fingerprint, validFingerprint);
   assert.equal(calls[1][2].confirm, true);
   assert.equal(card.blocked, false, "Confirmed save unlocks the next preview");
@@ -274,11 +280,12 @@ test("removal preview shows resulting schedule and sends one confirmed POST", as
   assert.equal(card._changeIsValid(), true);
   await card._previewChange();
   assert.equal(card.preview.before.length, 3);
-  assert.equal(card.preview.after.length, 2);
+  assert.equal(card.preview.after.length, 1);
   await card._saveChange();
   assert.equal(calls[1][1], "write_weekly_change");
   assert.equal(calls[1][2].from_time, "06:00");
   assert.equal(calls[1][2].to_time, "");
+  assert.equal(calls[1][2].end_time, "");
   assert.equal(calls[1][2].preset, "");
   assert.equal(calls.filter((call) => call[1] === "write_weekly_change").length, 1);
 });
@@ -288,6 +295,7 @@ test("changing operation or preset invalidates staged approval", async () => {
   card._toggleEdit(0);
   card.operation = "add";
   card.toTime = "12:00";
+  card.endTime = "13:00";
   card.preset = "Economy";
   await card._previewChange();
   assert.ok(card.preview);
@@ -321,6 +329,7 @@ test("failed add or remove write blocks repeating in the same UI session", async
   card._toggleEdit(0);
   card.operation = "add";
   card.toTime = "12:00";
+  card.endTime = "13:00";
   card.preset = "Economy";
   await card._previewChange();
   await card._saveChange();
@@ -369,6 +378,7 @@ test("known preflight refusal can be corrected in-place without another POST", a
   card._toggleEdit(0);
   card.operation = "add";
   card.toTime = "12:00";
+  card.endTime = "13:00";
   card.preset = "Economy";
   await card._previewChange();
   await card._saveChange();
@@ -380,4 +390,84 @@ test("known preflight refusal can be corrected in-place without another POST", a
   assert.equal(calls.filter((x) => x[1] === "write_weekly_change").length, 1);
   await card._previewChange();
   assert.equal(calls.filter((x) => x[1] === "preview_weekly_change").length, 2);
+});
+
+
+test("finite additions require both start and end and reject non-quarter times", async () => {
+  const {card, calls} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "12:00";
+  card.preset = "Economy";
+  assert.equal(card._changeIsValid(), false, "No default end at midnight");
+  await card._previewChange();
+  assert.equal(calls.length, 0, "No request without explicit end");
+  card.endTime = "12:00";
+  assert.equal(card._changeIsValid(), false);
+  card.endTime = "11:45";
+  assert.equal(card._changeIsValid(), false);
+  card.endTime = "13:07";
+  assert.equal(card._changeIsValid(), false);
+  card.toTime = "12:07";
+  card.endTime = "13:00";
+  assert.equal(card._changeIsValid(), false);
+  card.toTime = "12:00";
+  card.endTime = "22:00";
+  assert.equal(card._changeIsValid(), false, "Cannot cross existing 21:30 boundary");
+  card.endTime = "13:00";
+  assert.equal(card._changeIsValid(), true);
+  await card._previewChange();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][2].to_time, "12:00");
+  assert.equal(calls[0][2].end_time, "13:00");
+});
+
+test("quarter-hour dropdowns offer only 00 15 30 45 minute choices", () => {
+  const {card} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "12:00";
+  card.endTime = "13:00";
+  card.preset = "Economy";
+  card.key = "";
+  card.render();
+
+  function collect(node) {
+    const matches = [];
+    if (node.tag === "select") matches.push(node);
+    for (const child of node.children || []) matches.push(...collect(child));
+    return matches;
+  }
+  const selects = collect(card.shadowRoot);
+  const byLabel = (label) => selects.find((item) => item.attributes["aria-label"] === label);
+  const start = byLabel("Inizio o nuovo orario (15 minuti)");
+  const end = byLabel("Fine nuova fascia (15 minuti)");
+  assert.ok(start);
+  assert.ok(end);
+  for (const select of [start, end]) {
+    const values = select.children.map((opt) => opt.value).filter(Boolean);
+    assert.equal(values.length, 95);
+    assert.ok(values.includes("12:00"));
+    assert.ok(values.includes("12:15"));
+    assert.ok(values.includes("12:30"));
+    assert.ok(values.includes("12:45"));
+    assert.ok(!values.includes("12:07"));
+    assert.ok(!values.includes("24:00"));
+    assert.ok(values.every((value) => [0, 15, 30, 45].includes(
+      Number(value.split(":")[1]))));
+  }
+});
+
+test("changing only the end time invalidates a saved preview fingerprint", async () => {
+  const {card, calls} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "12:00";
+  card.endTime = "13:00";
+  card.preset = "Economy";
+  await card._previewChange();
+  assert.ok(card.preview);
+  card.endTime = "13:15";
+  await card._saveChange();
+  assert.equal(calls.length, 1, "Cannot save old preview with changed end");
 });
