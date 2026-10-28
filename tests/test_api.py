@@ -664,7 +664,7 @@ def test_weekly_experiment_unconfirmed_write_never_retries():
 
 
 @pytest.mark.parametrize("operation,parameters", [
-    ("add", {"to_time": "12:00", "preset": "Economy"}),
+    ("add", {"to_time": "12:00", "end_time": "13:00", "preset": "Economy"}),
     ("remove", {"from_time": "05:45"}),
 ])
 def test_cube_s_add_remove_writes_exactly_once_and_reads_back_every_day(
@@ -714,7 +714,7 @@ def test_cube_s_add_remove_rejects_stale_fingerprint_without_post():
         client = api.AristonClient(session, "user", "pass")
         with pytest.raises(api.CommandRejected, match="changed since preview"):
             await client.async_write_weekly_change(
-                "GW123", 1, "add", to_time="12:00",
+                "GW123", 1, "add", to_time="12:00", end_time="13:00",
                 preset="Economy", expected_fingerprint="0" * 64
             )
 
@@ -759,7 +759,7 @@ def test_cube_s_add_remove_full_week_mismatch_does_not_retry():
         client = api.AristonClient(session, "user", "pass")
         with pytest.raises(api.AristonResponseError, match="NOT CONFIRMED"):
             await client.async_write_weekly_change(
-                "GW123", 1, "add", to_time="12:00", preset="Economy",
+                "GW123", 1, "add", to_time="12:00", end_time="13:00", preset="Economy",
                 expected_fingerprint=weekly_read_fingerprint(raw),
             )
 
