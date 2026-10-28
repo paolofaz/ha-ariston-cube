@@ -122,6 +122,8 @@ def preview_one_boundary_move(
         return int(value[:2]) * 60 + int(value[3:])
 
     old_minute, new_minute = minute(from_time), minute(to_time)
+    if new_minute % 15:
+        raise ValueError("New times must use 15-minute steps")
     if old_minute == new_minute:
         raise ValueError("The new boundary must differ from the old boundary")
 
