@@ -1,8 +1,14 @@
+> **Stable v1.1.0 — Cube S weekly schedule editor.** On the Lovelace timetable, choose **Modifica fasce** to move an existing time, add a finite Comfort/Economy band with explicit start/end, remove a band, or **Clona giorno** onto multiple selected weekdays in one confirmed save. New times are selected in 15-minute increments. All writes require a fresh cloud preview, full-week fingerprint validation, explicit confirmation, a single POST and seven-day readback. [Release notes](docs/releases/v1.1.0.md).
+>
+> **Gas-hour alignment is still experimental and separate:** v1.0.2-rc.2 is not included in stable 1.1.0. Switching versions does not erase the existing gas cumulative sensor history or revert hourly Energy corrections, but it removes that RC's manual hour-alignment actions. Original stable v1.0.1 remains available by its tag.
+>
+> Cloud schedules persist on the boiler even after a software downgrade. Keep an official Ariston app screenshot of the current week and inspect the entire preview before saving.
+
 # Ariston Cube for Home Assistant
 
-**Version 1.0.1** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
+**Stable version 1.1.0** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
 
-Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, read-only Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
+Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, editable Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
 
 > **Disclaimer:** This is an independent community project, not an official Ariston integration. The Ariston cloud endpoints used here are not guaranteed to remain stable. The hardware and Home Assistant version above are the verified reference setup, not a claim of compatibility with every model or release.
 
@@ -158,3 +164,28 @@ python -m pytest -q
 Offline tests check data parsing, safety checks and entity contracts; they do **not** replace testing against a real boiler.
 
 Issues and source code: https://github.com/paolofaz/ha-ariston-cube
+
+
+### Testing the experimental Lovelace editor
+
+The bundled `custom:ariston-cube-weekly-card` is the **same card** as before.
+Tap **Modifica fasce** or an individual weekday to reveal an inline editor.
+Only moving an *existing, non-midnight start boundary* is supported in this
+first UI version; adding/removing periods and changing presets are deliberately
+out of scope until separately tested. One edit is attempted at a time.
+
+```yaml
+type: custom:ariston-cube-weekly-card
+entity: sensor.YOUR_ACTUAL_WEEKLY_PROGRAM_ENTITY
+title: Fasce riscaldamento Cube S
+```
+
+With a Storage dashboard, the integration upgrades the registered weekly
+resource to `/ariston_cube/ariston-cube-weekly-card.js?v=1.1.0-rc.6`.
+If the browser still renders the old card, hard-refresh the dashboard.
+YAML resource mode requires updating the resource URL manually. If reverting
+to stable **1.0.1**, also revert the weekly resource URL to `?v=1.0.1` in
+Settings → Dashboards → Resources if the old editor stays cached.
+
+Reinstalling a stable release does **not** restore any Cube S programme
+modified during experiments: review the actual Ariston schedule separately.

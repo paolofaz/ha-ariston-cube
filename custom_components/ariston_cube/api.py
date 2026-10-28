@@ -302,6 +302,228 @@ class AristonClient:
         except WebPortalError as exc:
             return exc
 
+    async def async_probe_weekly_methods(self, plant_id: str) -> dict[str, Any]:
+        """Read-only HTTP OPTIONS probe on the already-known Cube S GET route.
+
+        OPTIONS sends no schedule payload. An Allow header may indicate
+        supported methods, but does not establish their request schemas.
+        """
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si"
+            headers = {
+                "User-Agent": MOBILE_USER_AGENT,
+                "ar.authToken": self._token or "",
+            }
+            try:
+                async with self._session.request(
+                    "OPTIONS", BASE_URL + path, headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=25),
+                    allow_redirects=False,
+                ) as response:
+                    allow = response.headers.get("Allow", "")
+                    cors = response.headers.get("Access-Control-Allow-Methods", "")
+                    # Only ordinary verb names; do not expose any other
+                    # headers, server error pages, cookies or URLs.
+                    recognized = {"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"}
+                    verbs = sorted({
+                        word.strip().upper()
+                        for word in (allow + "," + cors).split(",")
+                        if word.strip().upper() in recognized
+                    })
+                    return {
+                        "http_status": response.status,
+                        "declared_methods": verbs,
+                        "conclusive": False,
+                        "note": (
+                            "HTTP OPTIONS only. A declared POST/PUT method does not "
+                            "prove the correct weekly-program write payload."
+                        ),
+                    }
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                raise AristonConnectionError(
+                    "HTTP OPTIONS weekly programme probe unavailable"
+                ) from exc
+
+
+    async def async_test_write_weekly_slice(
+        self, plant_id: str, day: int, from_time: str, to_time: str,
+        expected_fingerprint: str,
+    ) -> dict[str, Any]:
+        """One experimental, user-confirmed POST followed by one GET.
+
+        Server OPTIONS advertises POST on the GET endpoint; the JSON shape
+        remains a hypothesis. A failed/ambiguous reply is NEVER retried.
+        """
+        from .weekly_write import build_test_write, confirm_weekly_write
+
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si"
+            # A new source read, not the cached schedule coordinator state.
+            try:
+                before = await self._request("GET", path)
+            except AristonAuthError:
+                self._token = None
+                self._features.clear()
+                await self.async_login()
+                before = await self._request("GET", path)
+            if not isinstance(before, dict):
+                raise AristonResponseError("Invalid Cube S weekly schedule response")
+            try:
+                body, expected, preview = build_test_write(
+                    before, day, from_time, to_time, expected_fingerprint
+                )
+            except ValueError as exc:
+                raise CommandRejected(str(exc)) from exc
+
+            # Exactly ONE POST. Do not try a different JSON wrapper, route
+            # or HTTP method if Ariston rejects the request.
+            reply = await self._request("POST", path, json_body=body)
+            if isinstance(reply, dict) and (
+                reply.get("success") is False or reply.get("ok") is False
+            ):
+                raise AristonResponseError(
+                    "Cloud rejected the experimental schedule write; do not retry"
+                )
+            # Exact weekday comparison; no retry after ambiguous write.
+            after = await self._request("GET", path)
+            if not confirm_weekly_write(after, expected):
+                raise AristonResponseError(
+                    "POST attempted; Cube S schedule NOT CONFIRMED. "
+                    "Check the official app before attempting anything else"
+                )
+            return {
+                "status": "confirmed_by_fresh_cloud_read",
+                "weekday": preview["weekday"],
+                "before": preview["before"],
+                "after": preview["after"],
+                "changed": True,
+            }
+
+
+    async def async_write_weekly_change(
+        self, plant_id: str, day: int, operation: str,
+        *, from_time: str = "", to_time: str = "",
+        end_time: str = "", preset: str = "",
+        expected_fingerprint: str,
+    ) -> dict[str, Any]:
+        """Apply exactly ONE user-approved schedule change; never retry POST.
+
+        Supports moving a boundary, adding Comfort/Economy, or removing a
+        boundary. Full seven-day validation, fresh fingerprint, one POST,
+        one readback. The UI must always request an explicit confirmation.
+        """
+        from .weekly_changes import build_weekly_change, confirm_weekly_write
+
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si"
+            try:
+                before = await self._request("GET", path)
+            except AristonAuthError:
+                # Read-only authentication recovery. Never repeat the POST.
+                self._token = None
+                self._features.clear()
+                await self.async_login()
+                before = await self._request("GET", path)
+            if not isinstance(before, dict):
+                raise AristonResponseError("Invalid Cube S weekly response")
+            try:
+                body, expected, preview = build_weekly_change(
+                    before, day, operation, from_time=from_time,
+                    to_time=to_time, end_time=end_time, preset=preset,
+                    expected_fingerprint=expected_fingerprint,
+                )
+            except ValueError as exc:
+                raise CommandRejected(str(exc)) from exc
+
+            # This is the only schedule POST. If it fails or times out,
+            # NEVER retry automatically: the boiler may have accepted it.
+            reply = await self._request("POST", path, json_body=body)
+            if isinstance(reply, dict) and (
+                reply.get("success") is False or reply.get("ok") is False
+            ):
+                raise AristonResponseError(
+                    "Cube S rejected the change; no automatic retry"
+                )
+            after = await self._request("GET", path)
+            if not confirm_weekly_write(after, expected):
+                raise AristonResponseError(
+                    "POST attempted but weekly schedule NOT CONFIRMED. "
+                    "Check the official Ariston app before any other change"
+                )
+            return {
+                "status": "confirmed_by_fresh_cloud_read",
+                "weekday": preview["weekday"],
+                "operation": operation,
+                "before": preview["before"],
+                "after": preview["after"],
+                "changed": True,
+            }
+
+
+    async def async_clone_weekly_days(
+        self, plant_id: str, source_day: int, destinations: list[int],
+        expected_fingerprint: str,
+    ) -> dict[str, Any]:
+        """One user-confirmed cloud POST cloning one day onto multiple days.
+
+        The Ariston mobile schedule POST is not retried on timeout, failure,
+        or ambiguous GET verification. We require a fresh source fingerprint
+        before POST and exact full-week match after exactly one POST.
+        """
+        from .weekly_clone import (
+            build_clone_weekly_days, confirm_weekly_write,
+        )
+
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si"
+            try:
+                before = await self._request("GET", path)
+            except AristonAuthError:
+                # Retry GET authorization only, never a schedule write.
+                self._token = None
+                self._features.clear()
+                await self.async_login()
+                before = await self._request("GET", path)
+            if not isinstance(before, dict):
+                raise AristonResponseError("Invalid Cube S weekly response")
+            try:
+                body, expected, proposal = build_clone_weekly_days(
+                    before, source_day, destinations, expected_fingerprint
+                )
+            except ValueError as exc:
+                raise CommandRejected(str(exc)) from exc
+            # One POST covers every destination; no one-POST-per-day loop.
+            response = await self._request("POST", path, json_body=body)
+            if isinstance(response, dict) and (
+                response.get("success") is False or response.get("ok") is False
+            ):
+                raise AristonResponseError(
+                    "Cube S rejected day cloning; no automatic retry"
+                )
+            after = await self._request("GET", path)
+            if not confirm_weekly_write(after, expected):
+                raise AristonResponseError(
+                    "Clone POST sent but not confirmed for the entire week. "
+                    "Inspect the official Ariston app before any retry"
+                )
+            return {
+                "status": "confirmed_by_fresh_cloud_read",
+                "operation": "clone",
+                "source_weekday": proposal["source_weekday"],
+                "destination_weekdays": proposal["destination_weekdays"],
+                "changed_weekdays": proposal["changed_weekdays"],
+                "changed": True,
+            }
+
+
     async def async_read_weekly_program(self, plant_id: str) -> dict[str, Any]:
         """Read the existing Cube S schedule. Never issue a programme write."""
         async with self._lock:

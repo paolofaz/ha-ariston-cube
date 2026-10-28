@@ -1,6 +1,7 @@
 """Offline tests for the read-only Ariston mobile API client."""
 
 import asyncio
+import pytest
 import importlib
 from pathlib import Path
 import sys
@@ -16,10 +17,11 @@ api = importlib.import_module(f"{PACKAGE}.api")
 
 
 class Response:
-    def __init__(self, payload=None, status=200, path="/api/v2/remote/dataItems"):
+    def __init__(self, payload=None, status=200, path="/api/v2/remote/dataItems", headers=None):
         self.payload = payload
         self.status = status
         self.url = types.SimpleNamespace(path=path)
+        self.headers = headers or {}
 
     async def __aenter__(self):
         return self
@@ -501,3 +503,382 @@ def test_recent_gas_uses_cloud_two_hour_report_once():
     assert reads[0][1].endswith(
         "/reports/GW123/consSequencesApi8?usages=Ch%2CDhw&hasSlp=False"
     )
+
+
+def test_weekly_options_probe_is_read_only_and_exposes_no_credentials():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}, path="/api/v2/accounts/login"),
+        Response(status=204, headers={
+            "Allow": "GET, OPTIONS, POST",
+            "Set-Cookie": "PRIVATE_SECRET",
+        }),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_probe_weekly_methods("GW123")
+        assert result["http_status"] == 204
+        assert result["declared_methods"] == ["GET", "OPTIONS", "POST"]
+        assert result["conclusive"] is False
+        assert "PRIVATE_SECRET" not in repr(result)
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "OPTIONS"]
+    assert session.calls[1][1].endswith(
+        "/timeProgs/GW123/ChZn1?umsys=si"
+    )
+    assert "json" not in session.calls[1][2]
+
+
+def test_weekly_options_probe_405_is_not_assumed_to_support_writes():
+    session = Session(
+        Response({"token": "TEST_TOKEN"}),
+        Response(status=405),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        result = await client.async_probe_weekly_methods("GW123")
+        assert result["http_status"] == 405
+        assert result["declared_methods"] == []
+        assert result["conclusive"] is False
+
+    run(scenario())
+    assert session.calls[1][0] == "OPTIONS"
+
+
+def _weekly_write_fixture():
+    return {"ChZn1": {"plans": [
+        {"days": [0, 6], "slices": [
+            {"from": 0, "temp": 0}, {"from": 420, "temp": 1},
+            {"from": 1080, "temp": 0},
+        ]},
+        {"days": [1, 2, 3, 4, 5], "slices": [
+            {"from": 0, "temp": 0}, {"from": 345, "temp": 1},
+            {"from": 1290, "temp": 0},
+        ]},
+    ]}}
+
+
+def test_weekly_experiment_sends_one_post_and_verifies_full_week():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    from _ariston_cube_testpkg.weekly_write import build_test_write
+    source = _weekly_write_fixture()
+    fingerprint = weekly_read_fingerprint(source)
+    body, _, _ = build_test_write(source, 1, "05:45", "06:00", fingerprint)
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(source),
+        Response(None),
+        Response({"ChZn1": {"plans": body["plans"]}}),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        return await client.async_test_write_weekly_slice(
+            "GW123", 1, "05:45", "06:00", fingerprint
+        )
+
+    result = run(scenario())
+    assert result["status"] == "confirmed_by_fresh_cloud_read"
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET"
+    ]
+    assert session.calls[2][2]["json"] == body
+    assert all("/timeProgs/" in url for _, url, _ in session.calls[1:])
+
+
+def test_weekly_experiment_stale_fingerprint_never_posts():
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(_weekly_write_fixture()),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        try:
+            await client.async_test_write_weekly_slice(
+                "GW123", 1, "05:45", "06:00", "0" * 64
+            )
+        except api.CommandRejected:
+            return
+        assert False, "Stale preview must abort"
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "GET"]
+
+
+def test_weekly_experiment_post_rejection_never_retries():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response(status=400),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        try:
+            await client.async_test_write_weekly_slice(
+                "GW123", 1, "05:45", "06:00",
+                weekly_read_fingerprint(raw)
+            )
+        except api.AristonResponseError as exc:
+            assert "HTTP 400" in str(exc)
+            return
+        assert False, "HTTP 400 must be reported"
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST"
+    ]
+
+
+def test_weekly_experiment_unconfirmed_write_never_retries():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response(None),
+        Response(raw),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        try:
+            await client.async_test_write_weekly_slice(
+                "GW123", 1, "05:45", "06:00",
+                weekly_read_fingerprint(raw)
+            )
+        except api.AristonResponseError as exc:
+            assert "NOT CONFIRMED" in str(exc)
+            return
+        assert False, "Expected readback failure"
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET"
+    ]
+
+
+@pytest.mark.parametrize("operation,parameters", [
+    ("add", {"to_time": "12:00", "end_time": "13:00", "preset": "Economy"}),
+    ("remove", {"from_time": "05:45"}),
+])
+def test_cube_s_add_remove_writes_exactly_once_and_reads_back_every_day(
+        operation, parameters):
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    from _ariston_cube_testpkg.weekly_changes import build_weekly_change
+    raw = _weekly_write_fixture()
+    # A real Cube S GET has additional zone metadata. The successful rc.3
+    # moving-boundary write sends only {"plans": ...} in its POST.
+    raw["ChZn1"]["live_zone_metadata"] = {"opaque_revision": 7}
+    fingerprint = weekly_read_fingerprint(raw)
+    body, _, _ = build_weekly_change(
+        raw, 1, operation, expected_fingerprint=fingerprint, **parameters
+    )
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response(None),
+        Response({"ChZn1": {"plans": body["plans"]}}),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        return await client.async_write_weekly_change(
+            "GW123", 1, operation,
+            expected_fingerprint=fingerprint, **parameters
+        )
+
+    result = run(scenario())
+    assert result["status"] == "confirmed_by_fresh_cloud_read"
+    assert result["operation"] == operation
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET",
+    ]
+    assert session.calls[2][2]["json"] == body
+    assert sum(method == "POST" and "/timeProgs/" in url
+               for method, url, _ in session.calls) == 1
+
+
+def test_cube_s_add_remove_rejects_stale_fingerprint_without_post():
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(_weekly_write_fixture()),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.CommandRejected, match="changed since preview"):
+            await client.async_write_weekly_change(
+                "GW123", 1, "add", to_time="12:00", end_time="13:00",
+                preset="Economy", expected_fingerprint="0" * 64
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "GET"]
+
+
+def test_cube_s_add_remove_post_failure_does_not_retry():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response(status=400),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.AristonError):
+            await client.async_write_weekly_change(
+                "GW123", 1, "remove", from_time="05:45",
+                expected_fingerprint=weekly_read_fingerprint(raw),
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST"
+    ]
+
+
+def test_cube_s_add_remove_full_week_mismatch_does_not_retry():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response({"ok": True}),
+        Response(raw),  # cloud still shows the old schedule
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.AristonResponseError, match="NOT CONFIRMED"):
+            await client.async_write_weekly_change(
+                "GW123", 1, "add", to_time="12:00", end_time="13:00", preset="Economy",
+                expected_fingerprint=weekly_read_fingerprint(raw),
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET"
+    ]
+
+
+def test_cube_s_clones_three_days_in_one_post_and_confirms_complete_week():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    from _ariston_cube_testpkg.weekly_clone import build_clone_weekly_days
+    original = _weekly_write_fixture()
+    original["ChZn1"]["device_features"] = {"read_only_metadata": [1, 2]}
+    fingerprint = weekly_read_fingerprint(original)
+    targets = [3, 5, 0]
+    body, expected, proposal = build_clone_weekly_days(
+        original, 1, targets, fingerprint
+    )
+    assert proposal["destination_weekdays"] == ["Domenica", "Mercoledì", "Venerdì"]
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(original),
+        Response({"ok": True}),
+        Response({"ChZn1": {"plans": body["plans"]}}),
+    )
+
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        return await client.async_clone_weekly_days(
+            "GW123", 1, targets, fingerprint
+        )
+
+    result = run(scenario())
+    assert result["status"] == "confirmed_by_fresh_cloud_read"
+    assert result["changed"] is True
+    assert result["operation"] == "clone"
+    assert result["changed_weekdays"] == ["Domenica"]
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET"
+    ]
+    assert session.calls[2][2]["json"] == body
+    assert sum(1 for method, url, _ in session.calls if (
+        method == "POST" and "/timeProgs/" in url
+    )) == 1
+    assert expected["days"]["Domenica"] == expected["days"]["Lunedì"]
+
+
+def test_cube_s_clone_rejects_stale_fingerprint_with_zero_schedule_posts():
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.CommandRejected, match="changed since preview"):
+            await client.async_clone_weekly_days("GW123", 1, [0, 6], "0" * 64)
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "GET"]
+
+
+def test_cube_s_clone_ambiguous_post_failure_is_not_retried():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response(status=400),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.AristonError):
+            await client.async_clone_weekly_days(
+                "GW123", 1, [0], weekly_read_fingerprint(raw)
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST"
+    ]
+
+
+def test_cube_s_clone_unconfirmed_readback_is_not_retried():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+        Response({"ok": True}),
+        Response(raw),  # existing programme still visible after one POST
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.AristonResponseError, match="not confirmed"):
+            await client.async_clone_weekly_days(
+                "GW123", 1, [0], weekly_read_fingerprint(raw)
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == [
+        "POST", "GET", "POST", "GET"
+    ]
+
+
+def test_cube_s_clone_all_same_days_rejected_before_post():
+    from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
+    raw = _weekly_write_fixture()
+    session = Session(
+        Response({"token": "TOKEN"}),
+        Response(raw),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "pass")
+        with pytest.raises(api.CommandRejected, match="already match"):
+            await client.async_clone_weekly_days(
+                "GW123", 1, [2, 3, 4], weekly_read_fingerprint(raw)
+            )
+
+    run(scenario())
+    assert [method for method, _, _ in session.calls] == ["POST", "GET"]

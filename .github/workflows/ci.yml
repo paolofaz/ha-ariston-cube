@@ -22,3 +22,40 @@ jobs:
         run: python -m compileall -q custom_components/ariston_cube tests
       - name: Unit tests (offline)
         run: python -m pytest -q
+      - name: Check weekly Lovelace editor JavaScript syntax
+        run: |
+          node --check custom_components/ariston_cube/www/ariston-cube-weekly-card.js
+          node --check frontend/ariston-cube-weekly-card.js
+      - name: Test Lovelace editor interactions (Node)
+        run: node --test tests/test_weekly_editor.mjs
+
+  stable-release:
+    name: Publish stable v1.1.0
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish v1.1.0 when main CI passes (never retag existing releases)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          version = json.loads(
+              Path("custom_components/ariston_cube/manifest.json").read_text()
+          )["version"]
+          assert version == "1.1.0", "Refusing mismatched stable release"
+          PY
+          if gh release view v1.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.1.0 already exists; keeping its original tag"
+            exit 0
+          fi
+          gh release create v1.1.0 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Ariston Cube 1.1.0 — Cube S Weekly Editor + Clone Day" \
+            --notes-file docs/releases/v1.1.0.md
