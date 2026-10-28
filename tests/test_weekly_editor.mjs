@@ -167,10 +167,12 @@ test("weekday tap opens editor, preview is read-only, then save is one write", a
   assert.equal(calls[1][2].day, 1);
   assert.equal(calls[1][2].from_time, "06:00");
   assert.equal(calls[1][2].to_time, "06:15");
-  assert.equal(card.blocked, true);
+  assert.equal(card.blocked, false, "Confirmed save unlocks the next preview");
+  assert.equal(card.preview, null, "The previous fingerprint is consumed");
   assert.equal(card.messageKind, "success");
   await card._saveChange();
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 2, "Never reuse a consumed preview");
+
 });
 
 test("cancelling the real write never calls the write service", async () => {
@@ -256,10 +258,12 @@ test("adding a Comfort/Economy boundary requires preview and one write", async (
   assert.equal(calls[1][2].operation, "add");
   assert.equal(calls[1][2].expected_fingerprint, validFingerprint);
   assert.equal(calls[1][2].confirm, true);
-  assert.equal(card.blocked, true);
+  assert.equal(card.blocked, false, "Confirmed save unlocks the next preview");
+  assert.equal(card.preview, null, "The previous fingerprint is consumed");
   assert.equal(card.messageKind, "success");
   await card._saveChange();
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 2, "Never reuse a consumed preview");
+
 });
 
 test("removal preview shows resulting schedule and sends one confirmed POST", async () => {
@@ -324,4 +328,34 @@ test("failed add or remove write blocks repeating in the same UI session", async
   assert.equal(card.messageKind, "error");
   await card._saveChange();
   assert.equal(calls.filter((call) => call[1] === "write_weekly_change").length, 1);
+});
+
+
+test("two verified changes can be staged sequentially without closing editor", async () => {
+  const {card, calls, hass} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.toTime = "06:15";
+  await card._previewChange();
+  await card._saveChange();
+  assert.equal(card.blocked, false);
+  assert.equal(card.editing, true);
+  assert.equal(card.preview, null);
+  assert.equal(calls.filter((x) => x[1] === "test_write_weekly_slice").length, 1);
+  await card._saveChange();
+  assert.equal(calls.filter((x) => x[1] === "test_write_weekly_slice").length, 1);
+
+  // Simulate the HA coordinator publishing the cloud-confirmed changed day.
+  hass.states["sensor.cube_weekly"].attributes["Lunedì"]
+    = "00:00 Economy · 06:15 Comfort · 21:30 Economy";
+  card.hass = hass;
+  card.operation = "remove";
+  card.fromTime = "06:15";
+  card.toTime = "06:15";
+  await card._previewChange();
+  assert.ok(card.preview);
+  assert.equal(calls.filter((x) => x[1] === "preview_weekly_change").length, 1);
+  await card._saveChange();
+  assert.equal(calls.filter((x) => x[1] === "write_weekly_change").length, 1);
+  assert.equal(card.blocked, false);
+  assert.equal(card.preview, null);
 });
