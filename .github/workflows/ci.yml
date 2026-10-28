@@ -6,6 +6,7 @@ on:
       - main
       - feat/**
       - chore/**
+      - release/**
   pull_request:
 
 jobs:
@@ -30,7 +31,7 @@ jobs:
         run: node --test tests/test_weekly_editor.mjs
 
   stable-release:
-    name: Publish stable v1.1.0
+    name: Publish stable v1.2.0
     needs: tests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -38,7 +39,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Publish v1.1.0 when main CI passes (never retag existing releases)
+      - name: Publish immutable v1.2.0 after successful main CI
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -48,14 +49,14 @@ jobs:
           version = json.loads(
               Path("custom_components/ariston_cube/manifest.json").read_text()
           )["version"]
-          assert version == "1.1.0", "Refusing mismatched stable release"
+          assert version == "1.2.0", "Refusing mismatched stable release"
           PY
-          if gh release view v1.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "v1.1.0 already exists; keeping its original tag"
+          if gh release view v1.2.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.2.0 already exists; preserving immutable tag"
             exit 0
           fi
-          gh release create v1.1.0 \
+          gh release create v1.2.0 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Ariston Cube 1.1.0 — Cube S Weekly Editor + Clone Day" \
-            --notes-file docs/releases/v1.1.0.md
+            --title "Ariston Cube 1.2.0 — Cube S + gas Energia automatico" \
+            --notes-file docs/releases/v1.2.0.md
