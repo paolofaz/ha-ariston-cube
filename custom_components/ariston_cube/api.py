@@ -406,7 +406,8 @@ class AristonClient:
 
     async def async_write_weekly_change(
         self, plant_id: str, day: int, operation: str,
-        *, from_time: str = "", to_time: str = "", preset: str = "",
+        *, from_time: str = "", to_time: str = "",
+        end_time: str = "", preset: str = "",
         expected_fingerprint: str,
     ) -> dict[str, Any]:
         """Apply exactly ONE user-approved schedule change; never retry POST.
@@ -434,7 +435,7 @@ class AristonClient:
             try:
                 body, expected, preview = build_weekly_change(
                     before, day, operation, from_time=from_time,
-                    to_time=to_time, preset=preset,
+                    to_time=to_time, end_time=end_time, preset=preset,
                     expected_fingerprint=expected_fingerprint,
                 )
             except ValueError as exc:
