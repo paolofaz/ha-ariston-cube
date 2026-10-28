@@ -158,6 +158,6 @@ def test_release_marker_and_diagnostics_format_are_consistent():
     manifest = json.loads((ROOT / "manifest.json").read_text())
     source = (ROOT / "__init__.py").read_text()
     diag = (ROOT / "diagnostics.py").read_text()
-    assert manifest["version"] == "1.1.0-rc.3"
-    assert "Ariston Cube 1.1.0-rc.3 starting" in source
-    assert '"version": "1.1.0-rc.3"' in diag
+    assert manifest["version"] == "1.1.0-rc.4"
+    assert "Ariston Cube 1.1.0-rc.4 starting" in source
+    assert '"version": "1.1.0-rc.4"' in diag

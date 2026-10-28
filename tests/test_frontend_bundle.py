@@ -29,7 +29,7 @@ def test_lovelace_dependency_declared_and_versioned():
     assert "frontend" in manifest["dependencies"]
     assert "http" in manifest["dependencies"]
     assert "lovelace" in manifest["after_dependencies"]
-    assert manifest["version"] == "1.1.0-rc.3"
+    assert manifest["version"] == "1.1.0-rc.4"
 
 
 
@@ -37,5 +37,5 @@ def test_dhw_custom_card_is_no_longer_bundled_or_registered():
     assert not (ROOT / "www" / "ariston-cube-acs-card.js").exists()
     frontend = (ROOT / "frontend.py").read_text()
     assert "ariston-cube-acs-card.js" not in frontend
-    assert '_CARD_RESOURCE = _CARD_PATH + "?v=1.1.0-rc.3"' in frontend
+    assert '_CARD_RESOURCE = _CARD_PATH + "?v=1.1.0-rc.4"' in frontend
     assert 'resources.async_create_item' in frontend
