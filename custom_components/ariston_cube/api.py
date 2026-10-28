@@ -466,6 +466,64 @@ class AristonClient:
             }
 
 
+    async def async_clone_weekly_days(
+        self, plant_id: str, source_day: int, destinations: list[int],
+        expected_fingerprint: str,
+    ) -> dict[str, Any]:
+        """One user-confirmed cloud POST cloning one day onto multiple days.
+
+        The Ariston mobile schedule POST is not retried on timeout, failure,
+        or ambiguous GET verification. We require a fresh source fingerprint
+        before POST and exact full-week match after exactly one POST.
+        """
+        from .weekly_clone import (
+            build_clone_weekly_days, confirm_weekly_write,
+        )
+
+        async with self._lock:
+            if not self._token:
+                await self.async_login()
+            path = f"/api/v2/remote/timeProgs/{plant_id}/ChZn1?umsys=si"
+            try:
+                before = await self._request("GET", path)
+            except AristonAuthError:
+                # Retry GET authorization only, never a schedule write.
+                self._token = None
+                self._features.clear()
+                await self.async_login()
+                before = await self._request("GET", path)
+            if not isinstance(before, dict):
+                raise AristonResponseError("Invalid Cube S weekly response")
+            try:
+                body, expected, proposal = build_clone_weekly_days(
+                    before, source_day, destinations, expected_fingerprint
+                )
+            except ValueError as exc:
+                raise CommandRejected(str(exc)) from exc
+            # One POST covers every destination; no one-POST-per-day loop.
+            response = await self._request("POST", path, json_body=body)
+            if isinstance(response, dict) and (
+                response.get("success") is False or response.get("ok") is False
+            ):
+                raise AristonResponseError(
+                    "Cube S rejected day cloning; no automatic retry"
+                )
+            after = await self._request("GET", path)
+            if not confirm_weekly_write(after, expected):
+                raise AristonResponseError(
+                    "Clone POST sent but not confirmed for the entire week. "
+                    "Inspect the official Ariston app before any retry"
+                )
+            return {
+                "status": "confirmed_by_fresh_cloud_read",
+                "operation": "clone",
+                "source_weekday": proposal["source_weekday"],
+                "destination_weekdays": proposal["destination_weekdays"],
+                "changed_weekdays": proposal["changed_weekdays"],
+                "changed": True,
+            }
+
+
     async def async_read_weekly_program(self, plant_id: str) -> dict[str, Any]:
         """Read the existing Cube S schedule. Never issue a programme write."""
         async with self._lock:
