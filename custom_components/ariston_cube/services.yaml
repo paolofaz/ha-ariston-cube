@@ -79,8 +79,9 @@ preview_weekly_change:
   name: "Cube S — preview move/add/remove time band"
   description: >
     READ ONLY: fresh GET of the weekly programme, then prepare one weekday
-    boundary move, addition, or removal. Returns original/modified weekday
-    with fingerprint; never sends a schedule POST.
+    boundary move, finite start/end addition, or removal. Add requires
+    explicit start (to_time) and end (end_time), in 15-minute steps.
+    Returns original/modified weekday with fingerprint; no schedule POST.
   fields:
     day:
       name: "Day (Sunday=0, Monday=1, ... Saturday=6)"
@@ -108,7 +109,15 @@ preview_weekly_change:
       selector:
         text:
     to_time:
-      name: "New boundary (move/add, HH:MM)"
+      name: "Start/new time (move/add, HH:MM, 15-minute increments)"
+      selector:
+        text:
+    end_time:
+      name: "Explicit end of new band (required for add, HH:MM, 15-minute increments)"
+      description: >
+        Mandatory when operation is add. Must be later than to_time and
+        cannot cross an existing boundary. Restores the preceding preset
+        at this time; no implicit midnight end. Not used for move/remove.
       selector:
         text:
     preset:
@@ -122,7 +131,9 @@ preview_weekly_change:
 write_weekly_change:
   name: "Cube S — write one weekly band change (experimental)"
   description: >
-    An explicitly confirmed move/add/remove of ONE boundary on ONE weekday.
+    An explicitly confirmed move/add/remove of one weekday band. Adding
+    requires explicit start and end, creates the return-to-original preset
+    at end_time, and disallows overlaps. Times use 15-minute steps.
     Fresh cloud GET and fingerprint check, exactly ONE schedule POST, and
     seven-day readback. If readback fails, inspect official app before retry.
     This operation changes the real boiler and cannot be undone by reinstalling.
@@ -150,7 +161,15 @@ write_weekly_change:
       selector:
         text:
     to_time:
-      name: "New boundary (move/add, HH:MM)"
+      name: "Start/new time (move/add, HH:MM, 15-minute increments)"
+      selector:
+        text:
+    end_time:
+      name: "Explicit end of new band (required for add, HH:MM, 15-minute increments)"
+      description: >
+        Mandatory when operation is add. Must be later than to_time and
+        cannot cross an existing boundary. Restores the preceding preset
+        at this time; no implicit midnight end. Not used for move/remove.
       selector:
         text:
     preset:
