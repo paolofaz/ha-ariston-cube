@@ -297,3 +297,41 @@ def test_read_only_inspect_rejects_invalid_target(date, monkeypatch):
     )
     with pytest.raises(alignment.AlignmentRejected):
         asyncio.run(aligner.inspect_hour(date))
+
+
+
+def test_1515_rome_corrects_12_to_14_bucket_into_13_to_14():
+    """Exact day-of-field-test hour, with Italy now on CET (UTC+1)."""
+    from datetime import timedelta
+    too_early = alignment.slot_from_now(
+        datetime(2026, 10, 28, 15, 14, tzinfo=ROME)
+    )
+    assert too_early.hour == 12
+    end = alignment.slot_from_now(
+        datetime(2026, 10, 28, 15, 15, tzinfo=ROME)
+    )
+    assert end.hour == 14
+    assert (end - timedelta(hours=2)).hour == 12
+    target = end.astimezone(timezone.utc) - timedelta(hours=1)
+    following = target + timedelta(hours=1)
+    assert target.isoformat() == "2026-10-28T12:00:00+00:00"
+    assert following.isoformat() == "2026-10-28T13:00:00+00:00"
+
+
+def test_combined_rc_preserves_original_gas_sensor_unique_ids_and_ledger():
+    sensor = (ROOT / "sensor.py").read_text()
+    smc = (ROOT / "smc_coordinator.py").read_text()
+    assert 'super().__init__(coordinator, "gas_meter_v1_" + source_key)' in sensor
+    assert 'AristonCumulativeGas(smc, "total_heating_smc", "heating_gas_cumulative")' in sensor
+    assert 'AristonCumulativeGas(smc, "total_dhw_smc", "dhw_gas_cumulative")' in sensor
+    assert "coordinator.smc_coordinator = smc" in sensor
+    assert "ariston_cube_gas_meter_v1_" in smc or "ariston_cube_gas_meter_v1_" in (
+        ROOT / "gas_ledger.py"
+    ).read_text()
+    init = (ROOT / "__init__.py").read_text()
+    assert '"preview_weekly_clone"' in init
+    assert '"clone_weekly_days"' in init
+    assert '"preview_energy_hour_alignment"' in init
+    assert '"inspect_energy_hour_alignment"' in init
+    assert '"apply_energy_hour_alignment"' in init
+    assert "async_track_time_change" not in init
