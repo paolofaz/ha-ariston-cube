@@ -189,3 +189,63 @@ write_weekly_change:
       required: true
       selector:
         boolean:
+
+preview_weekly_clone:
+  name: "Cube S — preview clone from one day to several days"
+  description: >
+    READ ONLY. Read the current seven-day programme once, then preview
+    copying one source weekday to one or more chosen destinations. The
+    before/after preview includes every selected day. No cloud write.
+  fields:
+    source_day:
+      name: "Source weekday (Sunday=0, Monday=1 ... Saturday=6)"
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 6
+          step: 1
+          mode: box
+    destinations:
+      name: "Destination weekdays"
+      description: >
+        List of weekday numbers, for example [3, 5, 0] copies Monday
+        (source_day=1) to Wednesday, Friday and Sunday. Duplicates and
+        source-in-target are rejected.
+      required: true
+      selector:
+        object:
+
+clone_weekly_days:
+  name: "Cube S — clone one weekday to multiple selected weekdays"
+  description: >
+    Explicit confirmed write. Requires matching preview fingerprint,
+    one fresh GET, ONE cloud POST for all destinations, followed by an
+    exact full-week GET/readback. No automatic retry on ambiguous writes.
+    The source and unselected weekdays must remain unchanged.
+  fields:
+    source_day:
+      name: "Source weekday (Sunday=0, Monday=1 ... Saturday=6)"
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 6
+          step: 1
+          mode: box
+    destinations:
+      name: "Destination weekdays"
+      description: "List of weekday numbers, e.g. [3, 5, 0]."
+      required: true
+      selector:
+        object:
+    expected_fingerprint:
+      name: "Full-week fingerprint from preview"
+      required: true
+      selector:
+        text:
+    confirm:
+      name: "Confirm one real cloud schedule write"
+      required: true
+      selector:
+        boolean:
