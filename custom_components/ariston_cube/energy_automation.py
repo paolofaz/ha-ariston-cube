@@ -109,6 +109,11 @@ class AutomaticEnergyHourRunner:
             }
             if set(statuses) != {"heating", "dhw"}:
                 raise AlignmentRejected("Both existing gas sensors are required")
+            if any(
+                status not in ("can_shift", "zero_consumption", "already_aligned")
+                for status in statuses.values()
+            ):
+                raise AlignmentRejected("Unknown gas alignment status")
             report["sensor_statuses"] = statuses
             if not any(status == "can_shift" for status in statuses.values()):
                 report["result"] = "no_change_needed"
