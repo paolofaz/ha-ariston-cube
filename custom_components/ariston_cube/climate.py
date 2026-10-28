@@ -50,14 +50,19 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
 
     @property
     def target_temperature(self) -> float | None:
+        # During a pending manual comfort-setpoint change, show the chosen
+        # value immediately. Otherwise keep the real desired room setpoint.
+        pending = getattr(self.coordinator, "_pending_command", None)
+        if pending and pending[0] == "ZoneComfortTemp":
+            return as_temperature(getattr(self.coordinator, "display_data", self.coordinator.data).get("ZoneComfortTemp"))
         return as_temperature(self.coordinator.data.get("ZoneDesiredTemp"))
 
     @property
     def hvac_mode(self) -> HVACMode | None:
-        mode = heating_mode(self.coordinator.data)
+        mode = heating_mode(getattr(self.coordinator, "display_data", self.coordinator.data))
         if mode == "off":
             return HVACMode.OFF
-        if mode == "heat" and zone_program(self.coordinator.data) == "time_program":
+        if mode == "heat" and zone_program(getattr(self.coordinator, "display_data", self.coordinator.data)) == "time_program":
             return HVACMode.AUTO
         return HVACMode.HEAT if mode == "heat" else None
 
@@ -74,8 +79,10 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
-        data = self.coordinator.data
+        data = getattr(self.coordinator, "display_data", self.coordinator.data)
+        feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
         return {
+            **feedback("ZoneMode", "ZoneComfortTemp"),
             "ariston_target_temperature": self.target_temperature,
             "ariston_zone_program": zone_program(data),
             "ariston_comfort_temperature": as_temperature(data.get("ZoneComfortTemp")),

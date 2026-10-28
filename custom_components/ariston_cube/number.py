@@ -55,7 +55,12 @@ class AristonCubeNumber(AristonEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        return as_temperature(self.coordinator.data.get(self._field))
+        return as_temperature(getattr(self.coordinator, "display_data", self.coordinator.data).get(self._field))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
+        return feedback(self._field)
 
     @property
     def native_min_value(self) -> float:
