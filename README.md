@@ -1,51 +1,14 @@
-> **NEW EXPERIMENTAL 1.1.0-rc.6:** Adding a Cube S Comfort/Economy time band now requires **both start and end**, so it restores the previous preset at the specified end rather than lasting to the next arbitrary boundary. New times use selectable **15-minute slots**, enforced by backend validation. Deleting the newly inserted band can also remove its redundant return boundary. See [rc.6 release notes](docs/releases/v1.1.0-rc.6.md).
-> **Check the Ariston app before updating:** Any rc.5-added band may already have remained in effect beyond the intended ending time. Back up and verify the week. This release is SEPARATE from experimental gas-hour rc.2; do not swap away from gas rc.2 during its scheduled trial. Stable main stays unchanged.
+> **Stable v1.1.0 — Cube S weekly schedule editor.** On the Lovelace timetable, choose **Modifica fasce** to move an existing time, add a finite Comfort/Economy band with explicit start/end, remove a band, or **Clona giorno** onto multiple selected weekdays in one confirmed save. New times are selected in 15-minute increments. All writes require a fresh cloud preview, full-week fingerprint validation, explicit confirmation, a single POST and seven-day readback. [Release notes](docs/releases/v1.1.0.md).
+>
+> **Gas-hour alignment is still experimental and separate:** v1.0.2-rc.2 is not included in stable 1.1.0. Switching versions does not erase the existing gas cumulative sensor history or revert hourly Energy corrections, but it removes that RC's manual hour-alignment actions. Original stable v1.0.1 remains available by its tag.
+>
+> Cloud schedules persist on the boiler even after a software downgrade. Keep an official Ariston app screenshot of the current week and inspect the entire preview before saving.
 
-> **FIXED IN EXPERIMENTAL 1.1.0-rc.6:** Adding/removing Cube S time bands now accepts extra zone-level metadata returned by Ariston, using the SAME POST envelope as the successful rc.3 time-moving test. An error like "Unknown zone metadata" in rc.4 was a PRE-POST validation refusal and did not change the boiler. After a confirmed write, the editor stays open and requires a fresh preview for each further edit. See [rc.5 notes](docs/releases/v1.1.0-rc.6.md).
-> **CAUTION:** Add/remove have offline test coverage but require field verification on your real Cube S. Keep a screenshot of your original schedule and verify the Ariston app before leaving this branch. This build does NOT include the independent gas-hour correction rc.2; finish both experiments separately before combining them.
-
-> **NEW experimental 1.1.0-rc.6 — Cube S weekly editor now supports MOVE, ADD and REMOVE of a single Comfort/Economy boundary.**
-> Open the existing weekly card and choose an operation; always preview and confirm before one real cloud write.
-> Add/remove are tested offline but have **not yet been verified on the live boiler**; only boundary moving was validated in the Ariston app in rc.3.
-> **Do not install this version while testing gas-hour alignment rc.2:** these are separate experimental branches, not a combined release.
-> Stable 1.0.1 and all existing release tags remain untouched.
-> Details: [RC4 release notes](docs/releases/v1.1.0-rc.6.md).
-
-> **EXPERIMENTAL TEST BUILD 1.1.0-rc.6 — NOT the stable 1.0.1.**
-> This branch contains an unsupported, user-triggered Cube S weekly schedule
-> write experiment. The endpoint advertises POST, but its JSON body is still
-> unverified. If the server accepts an unexpected format, saved timings may
-> change. Switching back to stable software **will not revert boiler timings**.
->
-> **New weekly Lovelace card editor:** tap any weekday or **Modifica fasce**, select the existing start time and a new time, then use **Anteprima** and **Salva sul Cube S**. Save requires a fresh backend preview and explicit on-screen confirmation. One POST only, followed by full-week readback. The editor is offered only when the experiment's actions are registered.
->
-> **Developer Tools → Actions:** alternatively, first execute
-> `ariston_cube.preview_weekly_slice` and keep its
-> `source_fingerprint`. Then, only if you deliberately accept a real
-> device write, execute `ariston_cube.test_write_weekly_slice` using the
-> same day and before/after times and the fingerprint.
->
-> Example with a real Monday boundary, subject to a matching fresh read:
->
-> ```yaml
-> action: ariston_cube.test_write_weekly_slice
-> data:
->   day: 1
->   from_time: "05:45"
->   to_time: "06:00"
->   expected_fingerprint: "PASTE_THE_64_CHARACTER_FINGERPRINT_FROM_PREVIEW"
->   confirm: true
-> ```
->
-> The test performs **one POST only**, followed by one GET. It is not an automatic rollback. It does not
-> retry or roll back. If confirmation fails, use the official Ariston app
-> to inspect the actual programme before trying anything else.
->
 # Ariston Cube for Home Assistant
 
-**Stable base: version 1.0.1** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
+**Stable version 1.1.0** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
 
-Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, read-only Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
+Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, editable Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
 
 > **Disclaimer:** This is an independent community project, not an official Ariston integration. The Ariston cloud endpoints used here are not guaranteed to remain stable. The hardware and Home Assistant version above are the verified reference setup, not a claim of compatibility with every model or release.
 
