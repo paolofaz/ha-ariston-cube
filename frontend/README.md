@@ -51,3 +51,28 @@ the returned `source_fingerprint` as `expected_fingerprint`, and
 handles the entire preview/confirmation procedure for you.
 
 See [stable release notes](../docs/releases/v1.1.0.md).
+
+
+## Manual fallback for YAML-mode dashboards
+
+Copy the checked-in `frontend/ariston-cube-weekly-card.js` file to
+Home Assistant's `/config/www/ariston-cube-weekly-card.js`.
+In dashboard resources add this module URL:
+
+```text
+/local/ariston-cube-weekly-card.js
+```
+
+Then add a manual Lovelace card, replacing the placeholder with your
+actual weekly-programme sensor entity ID:
+
+```yaml
+type: custom:ariston-cube-weekly-card
+entity: sensor.SOSTITUISCI_CON_IL_TUO_ID_REALE
+title: Fasce riscaldamento Cube S
+```
+
+Storage-mode Lovelace dashboards normally do **not** need these manual steps;
+the integration registers the versioned resource automatically. After any
+update, refresh the Home Assistant browser cache if the old card remains
+visible.
