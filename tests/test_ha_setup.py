@@ -35,6 +35,10 @@ def _setup_module(monkeypatch):
     const_module.Platform = Platforms
     helpers_module = types.ModuleType("homeassistant.helpers")
     helpers_module.__path__ = []
+    config_validation_module = types.ModuleType("homeassistant.helpers.config_validation")
+    config_validation_module.config_entry_only_config_schema = (
+        lambda domain: lambda data: data
+    )
     clients_module = types.ModuleType("homeassistant.helpers.aiohttp_client")
     clients_module.async_get_clientsession = lambda hass: "shared-test-session"
     clients_module.async_create_clientsession = (
@@ -89,6 +93,7 @@ def _setup_module(monkeypatch):
         "homeassistant": hass_module,
         "homeassistant.const": const_module,
         "homeassistant.helpers": helpers_module,
+        "homeassistant.helpers.config_validation": config_validation_module,
         "homeassistant.helpers.aiohttp_client": clients_module,
         "_ariston_cube_setup_test": package,
         "_ariston_cube_setup_test.api": api_module,

@@ -11,6 +11,7 @@ from .weekly_changes import preview_weekly_change
 from .weekly_clone import preview_clone_weekly_days
 
 from homeassistant.const import Platform
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession, async_create_clientsession
 
 from .api import AristonClient
@@ -19,6 +20,9 @@ from .frontend import async_register_weekly_card
 
 _LOGGER = logging.getLogger(__name__)
 
+
+# This integration is configured only through the UI; YAML setup is unsupported.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _PREVIEW_SERVICE = "preview_weekly_change"
 

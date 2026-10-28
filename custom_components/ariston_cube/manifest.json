@@ -11,10 +11,15 @@
     "http"
   ],
   "after_dependencies": [
-    "lovelace"
+    "lovelace",
+    "recorder"
   ],
   "codeowners": [
     "@paolofaz"
   ],
-  "iot_class": "cloud_polling"
+  "iot_class": "cloud_polling",
+  "categories": [
+    "climate.thermostats_heating",
+    "energy.meters_monitoring"
+  ]
 }
