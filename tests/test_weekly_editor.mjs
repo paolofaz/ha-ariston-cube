@@ -20,7 +20,7 @@ const initial = {
   "Domenica": "00:00 Economy · 07:00 Comfort · 18:00 Economy",
 };
 
-function makeCard({enabled = true, approve = true, writeError = null} = {}) {
+function makeCard({enabled = true, approve = true, writeError = null, newEditor = false} = {}) {
   class Element {
     constructor(tag = "custom") {
       this.tag = tag;
@@ -69,6 +69,7 @@ function makeCard({enabled = true, approve = true, writeError = null} = {}) {
     services: enabled ? {ariston_cube: {
       preview_weekly_slice: {},
       test_write_weekly_slice: {},
+      ...(newEditor ? {preview_weekly_change: {}, write_weekly_change: {}} : {}),
     }} : {},
     async callService(...args) {
       calls.push(args);
@@ -88,6 +89,35 @@ function makeCard({enabled = true, approve = true, writeError = null} = {}) {
           ],
           changed: true, can_submit: false,
           source_fingerprint: validFingerprint,
+        }};
+      }
+      if (service === "preview_weekly_change") {
+        const payload = args[2];
+        const before = [
+          {minute: 0, time: "00:00", preset: "Economy"},
+          {minute: 360, time: "06:00", preset: "Comfort"},
+          {minute: 1290, time: "21:30", preset: "Economy"},
+        ];
+        let after;
+        if (payload.operation === "add") {
+          after = [
+            before[0], before[1],
+            {minute: 720, time: "12:00", preset: "Economy"},
+            before[2],
+          ];
+        } else if (payload.operation === "remove") {
+          after = [before[0], before[2]];
+        } else throw new Error("Unexpected mutation");
+        return {response: {
+          status: "preview_only_no_cloud_write", weekday: "Lunedì",
+          operation: payload.operation, before, after, changed: true,
+          can_submit: false, source_fingerprint: validFingerprint,
+        }};
+      }
+      if (service === "write_weekly_change") {
+        if (writeError) throw new Error(writeError);
+        return {response: {
+          status: "confirmed_by_fresh_cloud_read", changed: true,
         }};
       }
       if (service === "test_write_weekly_slice") {
@@ -190,4 +220,108 @@ test("changing day or time clears the staged write", async () => {
   assert.equal(card.preview, null);
   assert.equal(card.fromTime, "05:45");
   assert.equal(card.toTime, "05:45");
+});
+
+
+test("new card exposes add and remove actions only with backend support", () => {
+  const original = makeCard();
+  assert.equal(original.card._canAddRemove, false);
+  const {card} = makeCard({newEditor: true});
+  assert.equal(card._canAddRemove, true);
+  card._toggleEdit(0);
+  const editorText = card.shadowRoot.children
+    .flatMap((x) => x.children || [])
+    .map((x) => x.textContent || "").join(" ");
+  assert.ok(card.editing);
+  assert.ok(editorText.includes("Modifica"));
+});
+
+test("adding a Comfort/Economy boundary requires preview and one write", async () => {
+  const {card, calls} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "12:00";
+  card.preset = "Economy";
+  assert.equal(card._changeIsValid(), true);
+  await card._previewChange();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], "preview_weekly_change");
+  assert.equal(calls[0][2].operation, "add");
+  assert.equal(calls[0][2].to_time, "12:00");
+  assert.equal(calls[0][2].preset, "Economy");
+  assert.equal(card.preview.after.length, 4);
+  await card._saveChange();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1][1], "write_weekly_change");
+  assert.equal(calls[1][2].operation, "add");
+  assert.equal(calls[1][2].expected_fingerprint, validFingerprint);
+  assert.equal(calls[1][2].confirm, true);
+  assert.equal(card.blocked, true);
+  assert.equal(card.messageKind, "success");
+  await card._saveChange();
+  assert.equal(calls.length, 2);
+});
+
+test("removal preview shows resulting schedule and sends one confirmed POST", async () => {
+  const {card, calls} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.operation = "remove";
+  card.fromTime = "06:00";
+  assert.equal(card._changeIsValid(), true);
+  await card._previewChange();
+  assert.equal(card.preview.before.length, 3);
+  assert.equal(card.preview.after.length, 2);
+  await card._saveChange();
+  assert.equal(calls[1][1], "write_weekly_change");
+  assert.equal(calls[1][2].from_time, "06:00");
+  assert.equal(calls[1][2].to_time, "");
+  assert.equal(calls[1][2].preset, "");
+  assert.equal(calls.filter((call) => call[1] === "write_weekly_change").length, 1);
+});
+
+test("changing operation or preset invalidates staged approval", async () => {
+  const {card, calls} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "12:00";
+  card.preset = "Economy";
+  await card._previewChange();
+  assert.ok(card.preview);
+  card.preset = "Comfort";
+  await card._saveChange();
+  assert.equal(calls.length, 1, "No POST for changed preset");
+  card.preset = "Economy";
+  card.operation = "remove";
+  await card._saveChange();
+  assert.equal(calls.length, 1, "No POST for changed operation");
+});
+
+test("invalid new boundaries never send a cloud request", async () => {
+  const {card, calls} = makeCard({newEditor: true});
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "00:00";
+  await card._previewChange();
+  assert.equal(calls.length, 0);
+  card.toTime = "06:00";
+  await card._previewChange();
+  assert.equal(calls.length, 0);
+  card.operation = "remove";
+  card.fromTime = "00:00";
+  await card._previewChange();
+  assert.equal(calls.length, 0);
+});
+
+test("failed add or remove write blocks repeating in the same UI session", async () => {
+  const {card, calls} = makeCard({newEditor: true, writeError: "HTTP 400"});
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "12:00";
+  card.preset = "Economy";
+  await card._previewChange();
+  await card._saveChange();
+  assert.equal(card.blocked, true);
+  assert.equal(card.messageKind, "error");
+  await card._saveChange();
+  assert.equal(calls.filter((call) => call[1] === "write_weekly_change").length, 1);
 });
