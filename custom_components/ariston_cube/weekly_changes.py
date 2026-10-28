@@ -1,4 +1,4 @@
-"""One guarded Cube S weekday edit: move, insert, or remove a boundary.
+"""One guarded Cube S weekday edit: move, add finite band, or remove a boundary.
 
 Offline pure helpers. Cloud operations live in api.py, require a fresh GET,
 a matching full-week fingerprint, one POST, then seven-day readback.
@@ -30,7 +30,8 @@ def _minute(text: str) -> int:
 
 def preview_weekly_change(
     raw: Any, day: int, operation: str, *,
-    from_time: str = "", to_time: str = "", preset: str = "",
+    from_time: str = "", to_time: str = "", end_time: str = "",
+    preset: str = "",
 ) -> dict[str, Any]:
     """Preview exactly one change to a known weekday, with NO cloud write."""
     if type(day) is not int or not 0 <= day <= 6:
@@ -41,36 +42,66 @@ def preview_weekly_change(
     if before is None:
         raise ValueError("Cannot edit a weekday missing from the source")
     if operation == "move":
-        if preset:
-            raise ValueError("A move does not accept a new preset")
+        if preset or end_time:
+            raise ValueError("A move does not accept a preset or an end_time")
+        if _minute(to_time) % 15 != 0:
+            raise ValueError("New times must use 15-minute steps")
         if _minute(from_time) == 0 or _minute(to_time) == 0:
             raise ValueError("00:00 boundary is fixed in this editor")
         result = preview_one_boundary_move(raw, day, from_time, to_time)
     elif operation == "add":
         if from_time:
-            raise ValueError("Adding a boundary does not accept from_time")
-        new_minute = _minute(to_time)
-        if new_minute == 0:
+            raise ValueError("Adding a band does not accept from_time")
+        start_minute = _minute(to_time)
+        end_minute = _minute(end_time)  # REQUIRED: never silently ends at 24:00
+        if start_minute == 0:
             raise ValueError("00:00 boundary is fixed")
-        if any(row["minute"] == new_minute for row in before):
-            raise ValueError("A boundary already exists at the chosen time")
-        if len(before) >= MAX_SLICES:
-            raise ValueError("Maximum number of weekday time bands reached")
+        if start_minute % 15 or end_minute % 15:
+            raise ValueError("Start/end must be 15-minute steps")
+        if end_minute <= start_minute:
+            raise ValueError("End time must be later than start time")
         if preset not in ("Comfort", "Economy"):
             raise ValueError("New band must use Comfort or Economy")
-        # No fake change: inserting the same active preset would not change
-        # the time programme but would introduce a redundant boundary.
-        preceding = [row for row in before if row["minute"] < new_minute]
-        if preceding and preceding[-1]["preset"] == preset:
+        if any(row["minute"] == start_minute for row in before):
+            raise ValueError("A boundary already exists at the start time")
+
+        preceding = [row for row in before if row["minute"] < start_minute]
+        if not preceding:
+            # We do not guess the preset inherited from the preceding day.
+            raise ValueError("Cannot determine preset preceding the new band")
+        original_preset = preceding[-1]["preset"]
+        if original_preset == preset:
             raise ValueError("New band matches the current preset; no change")
+        # Do not overwrite a pre-existing transition. Exactly at a following
+        # boundary the old plan already resumes, so no new end row is needed.
+        existing_inside = [
+            row["minute"] for row in before
+            if start_minute < row["minute"] < end_minute
+        ]
+        if existing_inside:
+            raise ValueError("New band overlaps an existing schedule boundary")
+        restore_at_end = not any(
+            row["minute"] == end_minute for row in before
+        )
+        required_slices = 1 + int(restore_at_end)
+        if len(before) + required_slices > MAX_SLICES:
+            raise ValueError("Maximum number of weekday time bands reached")
+
         changes = [
             {"from": row["minute"], "temp": 1 if row["preset"] == "Comfort" else 0}
             for row in before
         ]
-        changes.append({"from": new_minute, "temp": 1 if preset == "Comfort" else 0})
+        changes.append({
+            "from": start_minute, "temp": 1 if preset == "Comfort" else 0
+        })
+        if restore_at_end:
+            changes.append({
+                "from": end_minute,
+                "temp": 1 if original_preset == "Comfort" else 0,
+            })
         result = preview_day_edit(raw, DAYS_IT[day], changes)
     else:
-        if to_time or preset:
+        if to_time or end_time or preset:
             raise ValueError("Removing a boundary accepts only from_time")
         old_minute = _minute(from_time)
         if old_minute == 0:
@@ -91,14 +122,15 @@ def preview_weekly_change(
     result["operation"] = operation
     result["from_time"] = from_time
     result["to_time"] = to_time
+    result["end_time"] = end_time
     result["preset"] = preset
     return result
 
 
 def build_weekly_change(
     raw: Any, day: int, operation: str, *,
-    from_time: str = "", to_time: str = "", preset: str = "",
-    expected_fingerprint: str,
+    from_time: str = "", to_time: str = "", end_time: str = "",
+    preset: str = "", expected_fingerprint: str,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Construct one full-week POST body only if every safety check passes."""
     if (
@@ -110,7 +142,8 @@ def build_weekly_change(
         raise ValueError("Cube S schedule changed since preview; no POST sent")
 
     proposal = preview_weekly_change(
-        raw, day, operation, from_time=from_time, to_time=to_time, preset=preset,
+        raw, day, operation, from_time=from_time, to_time=to_time,
+        end_time=end_time, preset=preset,
     )
     original = parse_weekly_program(raw)
     if any(week is None for week in original["days"].values()):
