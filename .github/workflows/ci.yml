@@ -85,9 +85,9 @@ jobs:
             echo "v1.1.1-rc.1 already exists; preserving immutable tag"
             exit 0
           fi
-          gh release create v1.1.1-rc.1 \\
-            --repo "$GITHUB_REPOSITORY" \\
-            --target "$GITHUB_SHA" \\
-            --prerelease \\
-            --title "Ariston Cube 1.1.1-rc.1 — Gas Energy Hour Alignment on Cube S Editor 1.1.0" \\
+          gh release create v1.1.1-rc.1 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Ariston Cube 1.1.1-rc.1 — Gas Energy Hour Alignment on Cube S Editor 1.1.0" \
             --notes-file docs/releases/v1.1.1-rc.1.md
