@@ -20,8 +20,8 @@ def test_weekly_card_has_opt_in_inline_editor_and_single_write_path():
     code = BUNDLE.read_text(encoding="utf-8")
     assert 'this._canEdit' in code
     assert 'Modifica fasce' in code
-    assert '"preview_weekly_slice"' in code
-    assert '"test_write_weekly_slice"' in code
+    assert '"preview_weekly_change"' in code
+    assert '"write_weekly_change"' in code
     assert "expected_fingerprint: fingerprint, confirm: true" in code
     assert "this.pending = true" in code
     assert "this.blocked = true" in code
