@@ -145,6 +145,7 @@ async def async_setup(hass, config) -> bool:
                 source, call.data["day"], call.data["operation"],
                 from_time=call.data.get("from_time", ""),
                 to_time=call.data.get("to_time", ""),
+                end_time=call.data.get("end_time", ""),
                 preset=call.data.get("preset", ""),
             )
         except (AristonError, ValueError) as exc:
@@ -176,6 +177,7 @@ async def async_setup(hass, config) -> bool:
                 coordinator.plant_id, call.data["day"], call.data["operation"],
                 from_time=call.data.get("from_time", ""),
                 to_time=call.data.get("to_time", ""),
+                end_time=call.data.get("end_time", ""),
                 preset=call.data.get("preset", ""),
                 expected_fingerprint=call.data["expected_fingerprint"],
             )
@@ -201,6 +203,7 @@ async def async_setup(hass, config) -> bool:
         vol.Required("operation"): vol.In(("move", "add", "remove")),
         vol.Optional("from_time", default=""): str,
         vol.Optional("to_time", default=""): str,
+        vol.Optional("end_time", default=""): str,
         vol.Optional("preset", default=""): vol.In(("", "Comfort", "Economy")),
     }
     hass.services.async_register(
