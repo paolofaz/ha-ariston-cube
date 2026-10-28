@@ -104,17 +104,19 @@ def test_fingerprint_changes_with_any_sum_or_entity():
     assert first != alignment.fingerprint_plan(modified)
 
 
-def test_service_is_explicit_manual_and_does_not_touch_gas_ledger():
+def test_gas_alignment_remains_internal_and_does_not_touch_gas_ledger():
     code = (ROOT / "__init__.py").read_text()
     module = (ROOT / "energy_alignment.py").read_text()
-    assert '"apply_energy_hour_alignment"' in code
-    assert 'vol.Required("confirm"): vol.Equal(True)' in code
+    runner = (ROOT / "energy_automation.py").read_text()
+    # No manual statistics-changing service is shown in the 1.3 Actions UI.
+    assert '"apply_energy_hour_alignment"' not in code
+    assert '"preview_energy_hour_alignment"' not in code
+    assert '"inspect_energy_hour_alignment"' in code
     assert "async_import_statistics" in module
     assert "async_block_till_done" in module
+    assert "async_import_statistics" not in runner
     assert "import sqlite3" not in module
     assert "_store.async_save" not in module
-    # The RC2 integration schedules only one local-time clock callback;
-    # the field-tested statistics writer itself remains free of timers.
     assert "async_track_time_change" in code
     assert "AutomaticEnergyHourRunner" in code
     assert "async_track_time_change" not in module
@@ -335,8 +337,8 @@ def test_combined_rc_preserves_original_gas_sensor_unique_ids_and_ledger():
     init = (ROOT / "__init__.py").read_text()
     assert '"preview_weekly_clone"' in init
     assert '"clone_weekly_days"' in init
-    assert '"preview_energy_hour_alignment"' in init
+    assert '"preview_energy_hour_alignment"' not in init
     assert '"inspect_energy_hour_alignment"' in init
-    assert '"apply_energy_hour_alignment"' in init
+    assert '"apply_energy_hour_alignment"' not in init
     assert "async_track_time_change" in init
     assert '"inspect_automatic_energy_hour_alignment"' in init

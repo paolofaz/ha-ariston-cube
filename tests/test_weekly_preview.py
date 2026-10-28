@@ -166,11 +166,16 @@ def test_bad_field_test_change_never_produces_a_preview(day, old, new):
 
 def test_developer_tools_action_exposes_preview_only():
     code = (ROOT / "__init__.py").read_text(encoding="utf-8")
-    assert 'preview_weekly_slice' in code
+    # The old unsupported test move service was retired. The current
+    # production change preview covers move/add/remove with the same
+    # fingerprint checks and has no cloud write.
+    assert '"preview_weekly_change"' in code
+    assert '"write_weekly_change"' in code
+    assert '"preview_weekly_slice"' not in code
+    assert '"test_write_weekly_slice"' not in code
     assert "SupportsResponse.ONLY" in code
-    assert "preview_one_boundary_move" in code
+    assert "preview_weekly_change(" in code
     assert "async_read_weekly_program" in code
-    assert "async_set_weekly" not in code
     yaml = (ROOT / "services.yaml").read_text(encoding="utf-8")
-    assert "preview_weekly_slice:" in yaml
-    assert "Does not save or change the boiler schedule." in yaml
+    assert "preview_weekly_change:" in yaml
+    assert "preview_weekly_slice:" not in yaml
