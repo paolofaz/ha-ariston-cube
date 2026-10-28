@@ -113,6 +113,10 @@ def test_service_is_explicit_manual_and_does_not_touch_gas_ledger():
     assert "async_block_till_done" in module
     assert "import sqlite3" not in module
     assert "_store.async_save" not in module
+    # The RC2 integration schedules only one local-time clock callback;
+    # the field-tested statistics writer itself remains free of timers.
+    assert "async_track_time_change" in code
+    assert "AutomaticEnergyHourRunner" in code
     assert "async_track_time_change" not in module
 
 
