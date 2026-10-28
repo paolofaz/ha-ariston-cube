@@ -1,4 +1,4 @@
-/* Ariston Cube weekly card, experimental edit mode (1.1.0-rc.4).
+/* Ariston Cube weekly card, experimental edit mode (1.1.0-rc.5).
  * Move, insert or delete ONE weekday boundary per save.
  * The backend performs a fresh GET, fingerprint check, ONE POST, full readback.
  * Never send requests directly to Ariston from this Lovelace card.
@@ -289,11 +289,18 @@
         if (result.status !== "confirmed_by_fresh_cloud_read" || result.changed !== true) {
           throw new Error("Risposta non confermata. Verifica nell'app Ariston.");
         }
-        this.preview = null;
-        this.message = "Modifica confermata dal cloud. Controlla anche l'app Ariston.";
+        // The cloud and complete seven-day readback confirmed the change.
+        // Unlock ONLY after that confirmation, never on ambiguous failures.
+        // Every further modification needs a fresh preview/fingerprint and
+        // a new explicit approval; no write is ever retried automatically.
+        this._invalidatePreview();
+        this.blocked = false;
+        this.message = "Modifica confermata dal cloud. Puoi prepararne un'altra "
+          + "senza chiudere l'editor: scegli l'operazione e premi di nuovo "
+          + "Anteprima. Verifica gli orari aggiornati anche nell'app Ariston.";
         this.messageKind = "success";
       } catch (err) {
-        this.preview = null;
+        this._invalidatePreview();
         this.message = "Salvataggio non confermato: "
           + (err?.message || "errore sconosciuto")
           + ". Prima di riprovare, controlla la programmazione nell'app Ariston.";
