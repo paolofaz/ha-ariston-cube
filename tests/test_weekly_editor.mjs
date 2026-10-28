@@ -20,7 +20,10 @@ const initial = {
   "Domenica": "00:00 Economy · 07:00 Comfort · 18:00 Economy",
 };
 
-function makeCard({enabled = true, approve = true, writeError = null, newEditor = false} = {}) {
+function makeCard({
+  enabled = true, approve = true, writeError = null,
+  newEditor = false, cloneEditor = false
+} = {}) {
   class Element {
     constructor(tag = "custom") {
       this.tag = tag;
@@ -41,7 +44,8 @@ function makeCard({enabled = true, approve = true, writeError = null, newEditor 
   const registry = new Map();
   const browser = {
     customCards: [],
-    confirm() {return approve;},
+    prompts: [],
+    confirm(message) {this.prompts.push(message); return approve;},
   };
   vm.runInNewContext(script, {
     HTMLElement: Element,
@@ -70,10 +74,50 @@ function makeCard({enabled = true, approve = true, writeError = null, newEditor 
       preview_weekly_slice: {},
       test_write_weekly_slice: {},
       ...(newEditor ? {preview_weekly_change: {}, write_weekly_change: {}} : {}),
+      ...(cloneEditor ? {preview_weekly_clone: {}, clone_weekly_days: {}} : {}),
     }} : {},
     async callService(...args) {
       calls.push(args);
       const service = args[1];
+      if (service === "preview_weekly_clone") {
+        const {source_day, destinations} = args[2];
+        const dayNames = [
+          "Domenica", "Lunedì", "Martedì", "Mercoledì",
+          "Giovedì", "Venerdì", "Sabato"
+        ];
+        const sourceSchedule = [
+          {minute: 0, time: "00:00", preset: "Economy"},
+          {minute: 360, time: "06:00", preset: "Comfort"},
+          {minute: 1290, time: "21:30", preset: "Economy"},
+        ];
+        const oldSchedule = [
+          {minute: 0, time: "00:00", preset: "Economy"},
+          {minute: 420, time: "07:00", preset: "Comfort"},
+          {minute: 1080, time: "18:00", preset: "Economy"},
+        ];
+        const before = {}, after = {};
+        for (const day of destinations) {
+          before[dayNames[day]] = oldSchedule;
+          after[dayNames[day]] = sourceSchedule;
+        }
+        return {response: {
+          status: "preview_only_no_cloud_write",
+          kind: "clone", changed: true, can_submit: false,
+          source_day, source_weekday: dayNames[source_day],
+          destinations, destination_weekdays: destinations.map((d) => dayNames[d]),
+          changed_destinations: destinations,
+          changed_weekdays: destinations.map((d) => dayNames[d]),
+          source_schedule: sourceSchedule, before, after,
+          source_fingerprint: validFingerprint,
+        }};
+      }
+      if (service === "clone_weekly_days") {
+        if (writeError) throw new Error(writeError);
+        return {response: {
+          status: "confirmed_by_fresh_cloud_read", operation: "clone",
+          changed: true,
+        }};
+      }
       if (service === "preview_weekly_slice") {
         return {response: {
           status: "preview_only_no_cloud_write", weekday: "Lunedì",
@@ -470,4 +514,137 @@ test("changing only the end time invalidates a saved preview fingerprint", async
   card.endTime = "13:15";
   await card._saveChange();
   assert.equal(calls.length, 1, "Cannot save old preview with changed end");
+});
+
+
+test("cloning Monday to Wednesday, Friday and Sunday previews and POSTS once", async () => {
+  const {card, calls, browser} = makeCard({newEditor: true, cloneEditor: true});
+  assert.equal(card._canClone, true);
+  card._toggleEdit(0);  // Monday index 0 / Ariston day 1
+  card.operation = "clone";
+  card.cloneTargets = [2, 4, 6];  // Wed, Fri, Sun
+  assert.equal(card._changeIsValid(), true);
+  await card._previewChange();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], "preview_weekly_clone");
+  assert.equal(calls[0][2].source_day, 1);
+  assert.deepEqual(calls[0][2].destinations, [0, 3, 5]);
+  assert.equal(card.preview.source_weekday, "Lunedì");
+  assert.equal(card.preview.destination_weekdays.length, 3);
+  await card._saveChange();
+  assert.equal(calls.length, 2, "All clone targets in ONE POST");
+  assert.equal(calls[1][1], "clone_weekly_days");
+  assert.equal(calls[1][2].source_day, 1);
+  assert.deepEqual(calls[1][2].destinations, [0, 3, 5]);
+  assert.equal(calls[1][2].expected_fingerprint, validFingerprint);
+  assert.equal(calls[1][2].confirm, true);
+  assert.equal(browser.prompts.length, 1);
+  for (const day of ["Lunedì", "Mercoledì", "Venerdì", "Domenica"]) {
+    assert.ok(browser.prompts[0].includes(day));
+  }
+  assert.ok(browser.prompts[0].includes("\nPRIMA: "), "popup has readable newlines");
+  assert.ok(!browser.prompts[0].includes("reinstallando la stable"));
+  assert.equal(card.preview, null, "Preview consumed after save");
+  assert.equal(card.blocked, false, "Confirmed success permits new preview");
+  await card._saveChange();
+  assert.equal(calls.length, 2);
+});
+
+
+test("clone requires destinations distinct from the source", async () => {
+  const {card, calls} = makeCard({newEditor: true, cloneEditor: true});
+  card._toggleEdit(0);
+  card.operation = "clone";
+  assert.equal(card._changeIsValid(), false);
+  await card._previewChange();
+  assert.equal(calls.length, 0);
+  card.cloneTargets = [0]; // the selected source
+  assert.equal(card._changeIsValid(), false);
+  card.cloneTargets = [2, 2];
+  assert.equal(card._changeIsValid(), false);
+  card.cloneTargets = [2, 4];
+  assert.equal(card._changeIsValid(), true);
+});
+
+
+test("selection checkboxes include six targets but never the source", () => {
+  const {card} = makeCard({newEditor: true, cloneEditor: true});
+  card._toggleEdit(0);
+  card.operation = "clone";
+  card.key = "";
+  card.render();
+  function walk(node) {
+    let list = node.tag === "input" && node.type === "checkbox" ? [node] : [];
+    for (const child of node.children || []) list.push(...walk(child));
+    return list;
+  }
+  const checkboxes = walk(card.shadowRoot);
+  assert.equal(checkboxes.length, 6);
+  assert.equal(checkboxes.some((x) => x.attributes["aria-label"] === "Clona su Lunedì"), false);
+  const wed = checkboxes.find((x) => x.attributes["aria-label"] === "Clona su Mercoledì");
+  const fri = checkboxes.find((x) => x.attributes["aria-label"] === "Clona su Venerdì");
+  wed.checked = true;
+  wed.listeners.change();
+  fri.checked = true;
+  fri.listeners.change();
+  assert.deepEqual(card.cloneTargets, [2, 4]);
+  assert.equal(card._changeIsValid(), true);
+});
+
+
+test("changing clone destinations or source invalidates preview approval", async () => {
+  const {card, calls} = makeCard({newEditor: true, cloneEditor: true});
+  card._toggleEdit(0);
+  card.operation = "clone";
+  card.cloneTargets = [2, 4, 6];
+  await card._previewChange();
+  assert.ok(card.preview);
+  card.cloneTargets = [2, 4];
+  await card._saveChange();
+  assert.equal(calls.length, 1);
+  card._setDay(1); // Tuesday
+  assert.deepEqual(card.cloneTargets, []);
+  assert.equal(card.preview, null);
+});
+
+
+test("clone cancelled confirmation never sends a write", async () => {
+  const {card, calls} = makeCard({
+    newEditor: true, cloneEditor: true, approve: false
+  });
+  card._toggleEdit(0);
+  card.operation = "clone";
+  card.cloneTargets = [2, 4];
+  await card._previewChange();
+  await card._saveChange();
+  assert.equal(calls.filter((x) => x[1] === "clone_weekly_days").length, 0);
+  assert.equal(card.blocked, false);
+});
+
+
+test("ambiguous clone failure does not retry or unlock writes", async () => {
+  const {card, calls} = makeCard({
+    newEditor: true, cloneEditor: true, writeError: "Cloud timeout"
+  });
+  card._toggleEdit(0);
+  card.operation = "clone";
+  card.cloneTargets = [2, 4, 6];
+  await card._previewChange();
+  await card._saveChange();
+  assert.equal(card.blocked, true);
+  assert.equal(card.messageKind, "error");
+  await card._saveChange();
+  assert.equal(calls.filter((x) => x[1] === "clone_weekly_days").length, 1);
+});
+
+
+test("ordinary time-move popup no longer mentions reinstalling stable", async () => {
+  const {card, browser} = makeCard();
+  card._toggleEdit(0);
+  card.toTime = "06:15";
+  await card._previewChange();
+  await card._saveChange();
+  assert.ok(browser.prompts[0].includes("PRIMA: "));
+  assert.ok(browser.prompts[0].includes("DOPO: "));
+  assert.ok(!browser.prompts[0].includes("reinstallando la stable"));
 });
