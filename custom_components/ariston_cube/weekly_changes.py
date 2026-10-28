@@ -110,9 +110,23 @@ def preview_weekly_change(
             raise ValueError("Boundary to remove was not found")
         if len(before) <= 1:
             raise ValueError("Cannot remove the last time band")
+        # Removing a finite inserted band must also remove its redundant
+        # restoration boundary, when the following preset is exactly the
+        # same as the preset preceding the deleted band. This restores the
+        # original day rather than leaving a no-op time change behind.
+        index = next(
+            i for i, row in enumerate(before) if row["minute"] == old_minute
+        )
+        redundant_end = None
+        if (
+            0 < index < len(before) - 1
+            and before[index + 1]["preset"] == before[index - 1]["preset"]
+        ):
+            redundant_end = before[index + 1]["minute"]
         changes = [
             {"from": row["minute"], "temp": 1 if row["preset"] == "Comfort" else 0}
-            for row in before if row["minute"] != old_minute
+            for row in before
+            if row["minute"] != old_minute and row["minute"] != redundant_end
         ]
         result = preview_day_edit(raw, DAYS_IT[day], changes)
 
