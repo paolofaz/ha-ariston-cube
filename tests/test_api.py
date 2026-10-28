@@ -672,6 +672,9 @@ def test_cube_s_add_remove_writes_exactly_once_and_reads_back_every_day(
     from _ariston_cube_testpkg.weekly_preview import weekly_read_fingerprint
     from _ariston_cube_testpkg.weekly_changes import build_weekly_change
     raw = _weekly_write_fixture()
+    # A real Cube S GET has additional zone metadata. The successful rc.3
+    # moving-boundary write sends only {"plans": ...} in its POST.
+    raw["ChZn1"]["live_zone_metadata"] = {"opaque_revision": 7}
     fingerprint = weekly_read_fingerprint(raw)
     body, _, _ = build_weekly_change(
         raw, 1, operation, expected_fingerprint=fingerprint, **parameters
