@@ -1,13 +1,19 @@
+# Home Assistant 1.3 — soltanto le azioni utilizzate dall'integrazione.
+# Tutte le operazioni di scrittura della settimana richiedono prima una
+# anteprima valida, poi fingerprint e autorizzazione esplicita.
+# Nessuna azione qui permette di scrivere manualmente statistiche gas.
+
 preview_weekly_change:
   name: "Cube S — Anteprima modifica fasce"
   description: >
-    SOLO LETTURA: fresh GET of the weekly programme, then prepare one weekday
-    boundary move, finite start/end addition, or removal. Add requires
-    explicit start (to_time) and end (end_time), in 15-minute steps.
-    Returns original/modified weekday with fingerprint; no schedule POST.
+    Legge il programma settimanale corrente dal cloud Ariston e mostra
+    una modifica di un giorno, senza inviare scritture. Operazioni:
+    move (sposta un orario), add (aggiungi una fascia con inizio e fine),
+    remove (elimina una fascia). Restituisce un fingerprint da usare
+    soltanto dopo aver verificato l'anteprima.
   fields:
     day:
-      name: "Day (Sunday=0, Monday=1, ... Saturday=6)"
+      name: "Giorno (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
       selector:
         number:
@@ -16,35 +22,34 @@ preview_weekly_change:
           step: 1
           mode: box
     operation:
-      name: Operation
+      name: Operazione
       required: true
       selector:
         select:
           options:
-            - label: Move existing boundary
+            - label: "Sposta orario"
               value: move
-            - label: Add Comfort/Economy boundary
+            - label: "Aggiungi fascia"
               value: add
-            - label: Remove existing boundary
+            - label: "Elimina fascia"
               value: remove
     from_time:
-      name: "Old boundary (move/remove, HH:MM)"
+      name: "Orario esistente da spostare/eliminare (HH:MM)"
       selector:
         text:
     to_time:
-      name: "Start/new time (move/add, HH:MM, 15-minute increments)"
+      name: "Nuovo orario / inizio fascia (HH:MM)"
       selector:
         text:
     end_time:
-      name: "Explicit end of new band (required for add, HH:MM, 15-minute increments)"
+      name: "Fine fascia aggiunta (HH:MM)"
       description: >
-        Mandatory when operation is add. Must be later than to_time and
-        cannot cross an existing boundary. Restores the preceding preset
-        at this time; no implicit midnight end. Not used for move/remove.
+        Obbligatoria con add, successiva all'inizio e senza sovrapporre
+        cambi esistenti. Il preset precedente riprende alla fine.
       selector:
         text:
     preset:
-      name: "New preset (add only)"
+      name: "Preset della nuova fascia (solo add)"
       selector:
         select:
           options:
@@ -54,15 +59,14 @@ preview_weekly_change:
 write_weekly_change:
   name: "Cube S — Salva modifica fasce"
   description: >
-    Modifica confermata di una fascia settimanale del Cube S. Adding
-    requires explicit start and end, creates the return-to-original preset
-    at end_time, and disallows overlaps. Times use 15-minute steps.
-    Fresh cloud GET and fingerprint check, exactly ONE schedule POST, and
-    seven-day readback. If readback fails, inspect official app before retry.
-    Questa operazione modifica il programma salvato nel cloud Ariston.
+    Scrive una modifica approvata del programma Cube S. Prima confronta
+    il fingerprint con una lettura fresca, poi esegue al massimo un
+    POST e verifica tutti i sette giorni. Richiede confirm=true.
+    Se la risposta cloud non è confermata, controlla nell'app Ariston
+    prima di ritentare.
   fields:
     day:
-      name: "Day (Sunday=0, Monday=1, ... Saturday=6)"
+      name: "Giorno (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
       selector:
         number:
@@ -71,44 +75,43 @@ write_weekly_change:
           step: 1
           mode: box
     operation:
-      name: Operation
+      name: Operazione
       required: true
       selector:
         select:
           options:
-            - move
-            - add
-            - remove
+            - label: "Sposta orario"
+              value: move
+            - label: "Aggiungi fascia"
+              value: add
+            - label: "Elimina fascia"
+              value: remove
     from_time:
-      name: "Old boundary (move/remove, HH:MM)"
+      name: "Orario esistente da spostare/eliminare (HH:MM)"
       selector:
         text:
     to_time:
-      name: "Start/new time (move/add, HH:MM, 15-minute increments)"
+      name: "Nuovo orario / inizio fascia (HH:MM)"
       selector:
         text:
     end_time:
-      name: "Explicit end of new band (required for add, HH:MM, 15-minute increments)"
-      description: >
-        Mandatory when operation is add. Must be later than to_time and
-        cannot cross an existing boundary. Restores the preceding preset
-        at this time; no implicit midnight end. Not used for move/remove.
+      name: "Fine fascia aggiunta (HH:MM)"
       selector:
         text:
     preset:
-      name: "New preset (add only)"
+      name: "Preset della nuova fascia (solo add)"
       selector:
         select:
           options:
             - Comfort
             - Economy
     expected_fingerprint:
-      name: Fingerprint from preview
+      name: "Fingerprint restituito dall'anteprima"
       required: true
       selector:
         text:
     confirm:
-      name: Confirm one real Cube S schedule POST
+      name: "Autorizzo una modifica reale del programma Cube S"
       required: true
       selector:
         boolean:
@@ -116,12 +119,12 @@ write_weekly_change:
 preview_weekly_clone:
   name: "Cube S — Anteprima clonazione giorni"
   description: >
-    SOLO LETTURA. Read the current seven-day programme once, then preview
-    copying one source weekday to one or more chosen destinations. The
-    before/after preview includes every selected day. No cloud write.
+    Legge il programma dei sette giorni e prepara la copia di un
+    giorno sorgente su uno o più giorni destinazione. Mostra i
+    programmi prima/dopo senza cambiare nulla sul cloud.
   fields:
     source_day:
-      name: "Source weekday (Sunday=0, Monday=1 ... Saturday=6)"
+      name: "Giorno sorgente (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
       selector:
         number:
@@ -130,11 +133,10 @@ preview_weekly_clone:
           step: 1
           mode: box
     destinations:
-      name: "Destination weekdays"
+      name: "Giorni destinatari"
       description: >
-        List of weekday numbers, for example [3, 5, 0] copies Monday
-        (source_day=1) to Wednesday, Friday and Sunday. Duplicates and
-        source-in-target are rejected.
+        Lista di numeri: [3, 5, 0] copia il lunedì su mercoledì,
+        venerdì e domenica. Sorgente e giorni ripetuti non ammessi.
       required: true
       selector:
         object:
@@ -142,13 +144,13 @@ preview_weekly_clone:
 clone_weekly_days:
   name: "Cube S — Clona giorno"
   description: >
-    Explicit confirmed write. Requires matching preview fingerprint,
-    one fresh GET, ONE cloud POST for all destinations, followed by an
-    exact full-week GET/readback. No automatic retry on ambiguous writes.
-    The source and unselected weekdays must remain unchanged.
+    Copia un programma giornaliero su più destinatari con conferma
+    esplicita e fingerprint fresco. Tutti i destinatari vengono
+    modificati con un solo POST; il programma completo viene riletto
+    e verificato. Non ritentare automaticamente dopo esito incerto.
   fields:
     source_day:
-      name: "Source weekday (Sunday=0, Monday=1 ... Saturday=6)"
+      name: "Giorno sorgente (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
       selector:
         number:
@@ -157,46 +159,43 @@ clone_weekly_days:
           step: 1
           mode: box
     destinations:
-      name: "Destination weekdays"
-      description: "List of weekday numbers, e.g. [3, 5, 0]."
+      name: "Giorni destinatari (esempio: [3, 5, 0])"
       required: true
       selector:
         object:
     expected_fingerprint:
-      name: "Full-week fingerprint from preview"
+      name: "Fingerprint restituito dall'anteprima"
       required: true
       selector:
         text:
     confirm:
-      name: "Confirm one real cloud schedule write"
+      name: "Autorizzo una clonazione reale del programma Cube S"
       required: true
       selector:
         boolean:
 
 inspect_energy_hour_alignment:
-  name: "Gas — Verifica statistiche di un'ora (lettura)"
+  name: "Gas — Verifica statistiche di un'ora (sola lettura)"
   description: >
-    SOLO LETTURA: inspect an existing hourly Recorder row and its adjacent
-    hours for both current gas sensor IDs. No statistics import, no sensor
-    update, no gas ledger mutation. Use to check the first manual correction
-    after an ambiguous write result.
+    Ispeziona le statistiche Recorder di un'ora e delle ore adiacenti
+    per i due sensori cumulativi del gas. Non modifica statistiche,
+    sensori o ledger. Disponibile per le ultime 72 ore.
   fields:
     target_start:
-      name: "Hour to inspect in UTC ISO 8601"
+      name: "Inizio dell'ora da controllare (timestamp UTC ISO 8601)"
       description: >
-        Example for Italian 07:00–08:00 on 2026-10-28:
-        2026-10-28T06:00:00+00:00. Only the last 72 hours.
+        Esempio: 2026-10-28T14:00:00+00:00 indica le 15–16
+        italiane del 28 ottobre 2026.
       required: true
       selector:
         text:
 
 inspect_automatic_energy_hour_alignment:
-  name: "Gas — Ultime correzioni automatiche (lettura)"
+  name: "Gas — Ultime correzioni automatiche (sola lettura)"
   description: >
-    SOLO LETTURA. Mostra gli ultimi otto tentativi automatici di allineamento
-    delle ore Energia, inclusi i periodi senza consumo, le correzioni
-    confermate e gli errori non confermati. Non legge né modifica i sensori
-    cumulativi, il ledger o le statistiche Recorder. Gli esiti sono
-    conservati solo in memoria e si azzerano riavviando Home Assistant.
-    Gli aggiornamenti automatici avvengono ogni due ore alle :15 delle
-    ore dispari locali; non ci sono recuperi di cicli persi né retry.
+    Mostra gli ultimi otto tentativi di allineamento orario gas e
+    relativi esiti (confermato, non necessario, saltato o incerto).
+    L'automatismo si attiva alle :15 delle ore dispari locali.
+    Nessun retry automatico o recupero delle fasce perse. Lo storico
+    diagnostico si azzera al riavvio di Home Assistant; le statistiche
+    Energia e il ledger non vengono modificati da questa lettura.
