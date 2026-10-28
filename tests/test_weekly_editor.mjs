@@ -359,3 +359,25 @@ test("two verified changes can be staged sequentially without closing editor", a
   assert.equal(card.blocked, false);
   assert.equal(card.preview, null);
 });
+
+
+test("known preflight refusal can be corrected in-place without another POST", async () => {
+  const {card, calls} = makeCard({
+    newEditor: true,
+    writeError: "Nessuna modifica inviata: Unknown zone metadata",
+  });
+  card._toggleEdit(0);
+  card.operation = "add";
+  card.toTime = "12:00";
+  card.preset = "Economy";
+  await card._previewChange();
+  await card._saveChange();
+  assert.equal(card.blocked, false, "Refused pre-POST requests are safe to re-preview");
+  assert.equal(card.preview, null);
+  assert.equal(card.editing, true);
+  assert.match(card.message, /Nessuna modifica inviata/);
+  await card._saveChange();
+  assert.equal(calls.filter((x) => x[1] === "write_weekly_change").length, 1);
+  await card._previewChange();
+  assert.equal(calls.filter((x) => x[1] === "preview_weekly_change").length, 2);
+});
