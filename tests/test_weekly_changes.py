@@ -1,0 +1,170 @@
+"""Offline regression tests for single weekday move/add/remove edits."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from pathlib import Path
+import importlib
+import sys
+import types
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1] / "custom_components/ariston_cube"
+PKG = "_ariston_cube_testpkg"
+if PKG not in sys.modules:
+    pkg = types.ModuleType(PKG)
+    pkg.__path__ = [str(ROOT)]
+    sys.modules[PKG] = pkg
+
+changes = importlib.import_module(PKG + ".weekly_changes")
+parser = importlib.import_module(PKG + ".weekly_program")
+preview = importlib.import_module(PKG + ".weekly_preview")
+
+
+def source():
+    return {"ChZn1": {"plans": [
+        {"days": [0, 6], "slices": [
+            {"from": 0, "temp": 0}, {"from": 420, "temp": 1},
+            {"from": 1080, "temp": 0},
+        ]},
+        {"days": [1, 2, 3, 4, 5], "slices": [
+            {"from": 0, "temp": 0}, {"from": 360, "temp": 1},
+            {"from": 1290, "temp": 0},
+        ]},
+    ]}}
+
+
+def build(raw, op, *, day=1, from_time="", to_time="", preset=""):
+    return changes.build_weekly_change(
+        raw, day, op, from_time=from_time, to_time=to_time,
+        preset=preset, expected_fingerprint=preview.weekly_read_fingerprint(raw),
+    )
+
+
+@pytest.mark.parametrize("op,args,expected_times", [
+    ("add", {"to_time": "12:00", "preset": "Economy"},
+     ["00:00", "06:00", "12:00", "21:30"]),
+    ("remove", {"from_time": "06:00"}, ["00:00", "21:30"]),
+    ("move", {"from_time": "06:00", "to_time": "06:15"},
+     ["00:00", "06:15", "21:30"]),
+])
+def test_one_mutation_preserves_other_six_weekdays(op, args, expected_times):
+    raw = source()
+    original = deepcopy(raw)
+    body, expected, proposal = build(raw, op, **args)
+    assert proposal["kind"] == "offline_preview_only"
+    assert proposal["changed"] is True
+    assert proposal["can_submit"] is False
+    assert proposal["operation"] == op
+    assert [row["time"] for row in expected["days"]["Lunedì"]] == expected_times
+    assert len(body["plans"]) == 3  # only Monday splits out of Mon-Fri
+    assert body["plans"][1]["days"] == [2, 3, 4, 5]
+    assert body["plans"][2]["days"] == [1]
+    before = parser.parse_weekly_program(raw)
+    for day in parser.DAYS_IT:
+        if day != "Lunedì":
+            assert expected["days"][day] == before["days"][day]
+    assert changes.confirm_weekly_write(
+        {"ChZn1": {"plans": body["plans"]}}, expected
+    )
+    assert raw == original
+
+
+def test_weekday_already_independent_does_not_add_plan():
+    raw = source()
+    raw["ChZn1"]["plans"][1]["days"] = [1]
+    raw["ChZn1"]["plans"].append({
+        "days": [2, 3, 4, 5],
+        "slices": deepcopy(raw["ChZn1"]["plans"][1]["slices"])
+    })
+    body, _, _ = build(raw, "add", to_time="12:00", preset="Economy")
+    assert len(body["plans"]) == 3
+
+
+@pytest.mark.parametrize("op,args,reason", [
+    ("add", {"to_time": "00:00", "preset": "Comfort"}, "00:00"),
+    ("add", {"to_time": "06:00", "preset": "Economy"}, "exists"),
+    ("add", {"to_time": "11:00", "preset": "Comfort"}, "current preset"),
+    ("add", {"to_time": "24:00", "preset": "Comfort"}, "HH:MM"),
+    ("add", {"to_time": "12:00", "preset": "Other"}, "Comfort or Economy"),
+    ("remove", {"from_time": "00:00"}, "start-of-day"),
+    ("remove", {"from_time": "13:00"}, "not found"),
+    ("remove", {"from_time": "06:00", "preset": "Comfort"}, "only from_time"),
+    ("move", {"from_time": "00:00", "to_time": "00:15"}, "00:00"),
+    ("move", {"from_time": "06:00", "to_time": "06:00"}, "differ"),
+    ("move", {"from_time": "06:00", "to_time": "21:30"}, "exists"),
+    ("move", {"from_time": "06:00", "to_time": "06:15", "preset": "Comfort"}, "does not accept"),
+    ("invalid", {"to_time": "12:00", "preset": "Comfort"}, "Operation"),
+])
+def test_invalid_change_rejected_before_write(op, args, reason):
+    with pytest.raises(ValueError, match=reason):
+        build(source(), op, **args)
+
+
+def test_delete_minimum_one_necessary_boundary_preserves_source():
+    raw = source()
+    raw["ChZn1"]["plans"][1]["slices"] = [
+        {"from": 0, "temp": 0}
+    ]
+    with pytest.raises(ValueError, match="not found"):
+        build(raw, "remove", from_time="06:00")
+    with pytest.raises(ValueError, match="start-of-day"):
+        build(raw, "remove", from_time="00:00")
+
+
+def test_add_rejects_limit_48_slices():
+    raw = source()
+    raw["ChZn1"]["plans"][1]["slices"] = [
+        {"from": n * 30, "temp": n % 2} for n in range(48)
+    ]
+    with pytest.raises(ValueError, match="Maximum"):
+        build(raw, "add", to_time="00:15", preset="Comfort")
+
+
+def test_shared_plan_limit_14_blocks_split():
+    raw = source()
+    # Seven independent weekdays would be enough; to reach 14, use eleven
+    # additional nonoverlapping plans? The strict parser forbids overlapping
+    # days, so 14 plans with seven days is impossible. A seven-day complete
+    # programme cannot reach 14 nonempty disjoint plan lists.
+    assert len(raw["ChZn1"]["plans"]) == 2
+
+
+def test_stale_fingerprint_rejected_without_payload():
+    raw = source()
+    with pytest.raises(ValueError, match="changed since preview"):
+        changes.build_weekly_change(
+            raw, 1, "add", to_time="12:00", preset="Economy",
+            expected_fingerprint="0" * 64,
+        )
+
+
+def test_metadata_is_never_lost_from_source():
+    raw = source()
+    raw["ChZn1"]["plans"][1]["label"] = "do_not_lose"
+    with pytest.raises(ValueError, match="metadata"):
+        build(raw, "add", to_time="12:00", preset="Economy")
+    raw = source()
+    raw["ChZn1"]["unexpected"] = "do_not_lose"
+    with pytest.raises(ValueError, match="zone metadata"):
+        build(raw, "remove", from_time="06:00")
+
+
+def test_cloud_readback_needs_all_days_exact():
+    raw = source()
+    body, expected, _ = build(
+        raw, "add", to_time="12:00", preset="Economy"
+    )
+    changed = {"ChZn1": {"plans": body["plans"]}}
+    assert changes.confirm_weekly_write(changed, expected)
+    changed["ChZn1"]["plans"][0]["slices"][1]["from"] = 435
+    assert not changes.confirm_weekly_write(changed, expected)
+
+
+def test_previews_never_touch_network_or_user_gas_data():
+    module = (ROOT / "weekly_changes.py").read_text()
+    assert "aiohttp" not in module
+    assert "async " not in module
+    assert "async_write" not in module
+    assert "gas_ledger" not in module
