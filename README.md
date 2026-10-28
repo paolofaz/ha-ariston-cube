@@ -1,22 +1,12 @@
-> **EXPERIMENTAL v1.1.1-rc.2 — correzione gas automatica ogni due ore.**
-> Mantiene tutte le funzioni della stabile 1.1.0 (incluso **Clona giorno**)
-> e automatizza la stessa correzione delle statistiche Energia già verificata
-> sul Cube S. Alle **:15 delle ore dispari locali** controlla i consumi
-> Ariston e, solo se tutti i dati coincidono, corregge una volta la statistica
-> oraria. **Nessun retry**, nessun recupero di orari persi, nessuna modifica
-> ai sensori cumulativi, agli ID o al ledger gas. Dopo ogni ciclo verifica con
-> `ariston_cube.inspect_automatic_energy_hour_alignment` (sola lettura).
-> [Istruzioni per 2–3 fasce e note RC2](docs/releases/v1.1.1-rc.2.md).
-
-> **Stable v1.1.0 — Cube S weekly schedule editor.** On the Lovelace timetable, choose **Modifica fasce** to move an existing time, add a finite Comfort/Economy band with explicit start/end, remove a band, or **Clona giorno** onto multiple selected weekdays in one confirmed save. New times are selected in 15-minute increments. All writes require a fresh cloud preview, full-week fingerprint validation, explicit confirmation, a single POST and seven-day readback. [Release notes](docs/releases/v1.1.0.md).
+> **STABILE v1.2.0 — Cube S + gas Energia automatico.** Mantiene tutte le funzioni dell'editor settimanale stabile 1.1.0 (fasce, orari da 15 minuti e **Clona giorno**) e aggiunge la correzione automatica dell'attribuzione oraria dei consumi Ariston. Ogni due ore alle **:15 delle ore dispari locali**, dopo verifica dei bucket e delle statistiche, corregge **solo** i valori idonei. Nessun retry automatico, nessuna modifica ai sensori gas cumulativi, agli unique ID, al ledger Smc o agli offset. La correzione 14–16 del 28 ottobre 2026 è stata confermata automaticamente da Recorder su entrambi i sensori. [Note della release stabile](docs/releases/v1.2.0.md).
 >
-> **Gas-hour alignment is still experimental and separate:** v1.0.2-rc.2 is not included in stable 1.1.0. Switching versions does not erase the existing gas cumulative sensor history or revert hourly Energy corrections, but it removes that RC's manual hour-alignment actions. Original stable v1.0.1 remains available by its tag.
+> **Diagnostica gas, solo lettura:** `ariston_cube.inspect_automatic_energy_hour_alignment` mostra gli ultimi cicli; `ariston_cube.inspect_energy_hour_alignment` consente di verificare una specifica ora. Per periodi già corretti dall'automatismo, non usare `apply_energy_hour_alignment` manualmente. Le versioni v1.1.0 e v1.1.1-rc.2 restano disponibili nei rispettivi tag.
 >
-> Cloud schedules persist on the boiler even after a software downgrade. Keep an official Ariston app screenshot of the current week and inspect the entire preview before saving.
+> Il miglioramento della reattività di Lovelace è una futura modifica separata: questa release mantiene il percorso di conferma cloud per i comandi di temperatura e modalità.
 
 # Ariston Cube for Home Assistant
 
-**Stable version 1.1.0** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
+**Stable version 1.2.0** — A custom HACS integration developed and field-tested with an **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using **Home Assistant Container / Core 2026.10.4**.
 
 Ariston Cube provides boiler and heating-zone controls, domestic hot water (DHW) temperature control, editable Cube S schedules, and persistent gas consumption totals for the Home Assistant Energy dashboard.
 
