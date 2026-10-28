@@ -1,4 +1,4 @@
-/* Ariston Cube weekly card, weekly clone editor (1.1.0-rc.7).
+/* Ariston Cube weekly card, weekly clone editor (1.1.0).
  * Move, insert or delete ONE weekday boundary per save.
  * The backend performs a fresh GET, fingerprint check, ONE POST, full readback.
  * Never send requests directly to Ariston from this Lovelace card.
