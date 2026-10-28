@@ -204,7 +204,7 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     # Only static entity names; no account or plant data in the output.
     return {
         "integration": "ariston_cube",
-        "version": "1.2.0",
+        "version": "1.3.0-rc.1",
         "purpose": "schema_only_no_personal_values",
         "reports": safe_reports,
         "consumption_inventory": safe_consumption_inventory(

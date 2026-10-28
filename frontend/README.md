@@ -1,4 +1,4 @@
-# Cube S weekly timetable Lovelace card (stable 1.1.0)
+# Cube S weekly timetable Lovelace card (v1.3.0-rc.1)
 
 The integration bundles `ariston-cube-weekly-card.js`. For storage-mode
 Lovelace dashboards Home Assistant registers the resource automatically;
@@ -30,9 +30,9 @@ preview and confirmation. If cloud write confirmation is ambiguous, the
 editor blocks another write: **inspect the official Ariston app** first.
 Cloud programme changes persist across software version changes.
 
-**The multi-target clone action is newly added to v1.1.0 and has passed
-offline and simulated cloud tests; it requires a deliberate live Cube S
-field check.** The earlier move/add/remove operations were field-tested.
+**La clonazione multi-giorno e le operazioni sposta/aggiungi/elimina sono
+state verificate su Cube S reale.** La 1.3.0-rc.1 riutilizza le quattro
+azioni ufficiali per modifica e clonazione; gli endpoint TEST sono eliminati.
 
 ## Developer Tools / Actions (optional)
 

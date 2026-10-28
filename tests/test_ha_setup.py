@@ -179,9 +179,9 @@ def test_release_marker_and_diagnostics_format_are_consistent():
     manifest = json.loads((ROOT / "manifest.json").read_text())
     source = (ROOT / "__init__.py").read_text()
     diag = (ROOT / "diagnostics.py").read_text()
-    assert manifest["version"] == "1.2.0"
-    assert "Ariston Cube 1.2.0 starting" in source
-    assert '"version": "1.2.0"' in diag
+    assert manifest["version"] == "1.3.0-rc.1"
+    assert "Ariston Cube 1.3.0-rc.1 starting" in source
+    assert '"version": "1.3.0-rc.1"' in diag
 
 
 def test_unload_stops_automatic_energy_timer_and_clears_callback(monkeypatch):
