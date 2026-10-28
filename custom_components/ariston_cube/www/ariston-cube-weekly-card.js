@@ -301,9 +301,21 @@
         this.messageKind = "success";
       } catch (err) {
         this._invalidatePreview();
-        this.message = "Salvataggio non confermato: "
-          + (err?.message || "errore sconosciuto")
-          + ". Prima di riprovare, controlla la programmazione nell'app Ariston.";
+        const reason = err?.message || "errore sconosciuto";
+        // The dedicated backend prefix is used ONLY when the fresh-read
+        // preflight refused the request before any schedule POST. Reopen
+        // preview in-place; a new fresh fingerprint is still mandatory.
+        if (reason.includes("Nessuna modifica inviata:")) {
+          this.blocked = false;
+          this.message = reason
+            + ". Nessuna scrittura effettuata: correggi la scelta e premi "
+            + "di nuovo Anteprima.";
+        } else {
+          // A request could have reached the Cube S. Never allow another
+          // write in the same session after an ambiguous result.
+          this.message = "Salvataggio non confermato: " + reason
+            + ". Prima di riprovare, controlla la programmazione nell'app Ariston.";
+        }
         this.messageKind = "error";
       } finally {
         this.pending = false;
