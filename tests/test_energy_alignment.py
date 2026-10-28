@@ -338,4 +338,5 @@ def test_combined_rc_preserves_original_gas_sensor_unique_ids_and_ledger():
     assert '"preview_energy_hour_alignment"' in init
     assert '"inspect_energy_hour_alignment"' in init
     assert '"apply_energy_hour_alignment"' in init
-    assert "async_track_time_change" not in init
+    assert "async_track_time_change" in init
+    assert '"inspect_automatic_energy_hour_alignment"' in init
