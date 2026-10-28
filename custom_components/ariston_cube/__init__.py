@@ -179,7 +179,11 @@ async def async_setup(hass, config) -> bool:
                 preset=call.data.get("preset", ""),
                 expected_fingerprint=call.data["expected_fingerprint"],
             )
-        except (AristonError, CommandRejected) as exc:
+        except CommandRejected as exc:
+            # This error is raised by the fresh-read preflight BEFORE the POST.
+            # Distinguish a harmless refusal from an ambiguous cloud write.
+            raise HomeAssistantError("Nessuna modifica inviata: " + str(exc)) from exc
+        except AristonError as exc:
             raise HomeAssistantError(str(exc)) from exc
         weekly = getattr(coordinator, "weekly_coordinator", None)
         if weekly is not None:
