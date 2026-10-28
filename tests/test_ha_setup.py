@@ -52,6 +52,22 @@ def _setup_module(monkeypatch):
 
     frontend_module.async_register_weekly_card = register_mock_frontend
 
+    event_module = types.ModuleType("homeassistant.helpers.event")
+
+    def track_local_hour(hass, listener, *, minute, second):
+        # Mimic HA's local-time scheduler with an explicit teardown hook.
+        hass.data["energy_timer"] = {
+            "listener": listener, "minute": minute, "second": second,
+            "unsubscribed": False,
+        }
+
+        def unsubscribe():
+            hass.data["energy_timer"]["unsubscribed"] = True
+
+        return unsubscribe
+
+    event_module.async_track_time_change = track_local_hour
+
     class Client:
         def __init__(self, session, username, password, *, web_session=None):
             assert session == "shared-test-session"
@@ -78,6 +94,7 @@ def _setup_module(monkeypatch):
         "_ariston_cube_setup_test.api": api_module,
         "_ariston_cube_setup_test.coordinator": coordinator_module,
         "_ariston_cube_setup_test.frontend": frontend_module,
+        "homeassistant.helpers.event": event_module,
     }.items():
         monkeypatch.setitem(sys.modules, name, fake)
 
@@ -108,6 +125,10 @@ def test_async_setup_entry_reports_success_and_forwards_eight_platforms(monkeypa
     assert hass.data["ariston_cube_frontend_registered"] is True
     assert entry.runtime_data.first_refresh_called
     assert set(platforms) == {"sensor", "binary_sensor", "climate", "water_heater", "number", "select", "switch", "calendar"}
+    assert hass.data["energy_timer"]["minute"] == 15
+    assert hass.data["energy_timer"]["second"] == 0
+    assert entry.runtime_data.energy_hour_runner is not None
+    assert entry.runtime_data.energy_hour_unsubscribe is not None
 
 
 def test_setup_does_not_return_none(monkeypatch):
@@ -161,3 +182,31 @@ def test_release_marker_and_diagnostics_format_are_consistent():
     assert manifest["version"] == "1.1.1-rc.1"
     assert "Ariston Cube 1.1.1-rc.1 starting" in source
     assert '"version": "1.1.1-rc.1"' in diag
+
+
+def test_unload_stops_automatic_energy_timer_and_clears_callback(monkeypatch):
+    integration = _setup_module(monkeypatch)
+
+    class Entries:
+        async def async_forward_entry_setups(self, entry, platforms):
+            pass
+
+        async def async_unload_platforms(self, entry, platforms):
+            return True
+
+    entry = types.SimpleNamespace(
+        data={"username": "test-user", "password": "test-password"}
+    )
+    hass = types.SimpleNamespace(config_entries=Entries(), data={})
+
+    async def scenario():
+        assert await integration.async_setup_entry(hass, entry)
+        timer = hass.data["energy_timer"]
+        assert timer["minute"] == 15
+        assert entry.runtime_data.energy_hour_runner.status()["enabled"] is True
+        assert await integration.async_unload_entry(hass, entry)
+        assert timer["unsubscribed"] is True
+        assert entry.runtime_data.energy_hour_runner.status()["enabled"] is False
+        assert entry.runtime_data.energy_hour_unsubscribe is None
+
+    asyncio.run(scenario())
