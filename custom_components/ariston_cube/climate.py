@@ -52,9 +52,10 @@ class AristonCubeClimate(AristonEntity, ClimateEntity):
     def target_temperature(self) -> float | None:
         # During a pending manual comfort-setpoint change, show the chosen
         # value immediately. Otherwise keep the real desired room setpoint.
-        pending = getattr(self.coordinator, "_pending_command", None)
-        if pending and pending[0] == "ZoneComfortTemp":
-            return as_temperature(getattr(self.coordinator, "display_data", self.coordinator.data).get("ZoneComfortTemp"))
+        feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
+        if feedback("ZoneComfortTemp").get("ariston_comando_in_corso"):
+            visible = getattr(self.coordinator, "display_data", self.coordinator.data)
+            return as_temperature(visible.get("ZoneComfortTemp"))
         return as_temperature(self.coordinator.data.get("ZoneDesiredTemp"))
 
     @property
