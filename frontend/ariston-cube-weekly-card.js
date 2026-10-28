@@ -475,8 +475,9 @@
         fields.append(opField);
       }
 
+      let cloneBox = null;
       if (this.operation === "clone") {
-        const cloneBox = el("fieldset", "clone-targets");
+        cloneBox = el("fieldset", "clone-targets");
         const heading = el("legend", "", "Copia su questi giorni (puoi selezionarne più di uno)");
         cloneBox.append(heading);
         const options = el("div", "clone-grid");
@@ -501,10 +502,6 @@
           options.append(option);
         });
         cloneBox.append(options);
-        editor.append(cloneBox);
-        editor.append(el("p", "subtitle",
-          "Il programma del giorno sorgente sostituisce quello dei giorni selezionati. "
-          + "Gli altri giorni non cambiano."));
       }
 
       const boundaries = (weekly[this.dayIndex] || []).filter((p) => p.minute > 0);
@@ -592,6 +589,12 @@
       }
 
       editor.append(fields);
+      if (cloneBox) {
+        editor.append(cloneBox);
+        editor.append(el("p", "subtitle",
+          "Il programma del giorno sorgente sostituisce quello dei giorni selezionati. "
+          + "Gli altri giorni non cambiano."));
+      }
       const actions = el("div", "buttons");
       const previewBtn = el("button", "btn primary", this.pending ? "Operazione in corso…" : "Anteprima");
       previewBtn.type = "button";
