@@ -29,7 +29,7 @@ DEPRECATED = {
 
 def test_yaml_declares_exactly_six_actions_without_old_test_badges():
     source = (INTEGRATION / "services.yaml").read_text()
-    names = set(re.findall(r"^([a-z][a-z_]+):\\s*$", source, re.M))
+    names = set(re.findall(r"^([a-z][a-z_]+):\s*$", source, re.M))
     assert names == PUBLIC
     assert "TEST" not in source.upper()
     assert not DEPRECATED.intersection(names)
@@ -52,7 +52,7 @@ def test_runtime_registers_exactly_the_actions_described_in_yaml():
     assert len(registered) == len(PUBLIC)
     assert set(registered) == PUBLIC
     for name in DEPRECATED:
-        assert '\\"' + name + '\\"' not in source
+        assert f'"{name}"' not in source
 
 
 def test_cloud_writer_is_preserved_but_not_exposed_as_a_test_service():
