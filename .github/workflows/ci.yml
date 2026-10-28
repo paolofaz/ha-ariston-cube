@@ -59,3 +59,35 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "Ariston Cube 1.1.0 — Cube S Weekly Editor + Clone Day" \
             --notes-file docs/releases/v1.1.0.md
+
+  gas-alignment-candidate:
+    name: Publish experimental gas+editor RC
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/smc-energy-alignment-on-v1.1.0'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish v1.1.1-rc.1 after passing tests (never retag)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          actual = json.loads(
+              Path("custom_components/ariston_cube/manifest.json").read_text()
+          )["version"]
+          assert actual == "1.1.1-rc.1", "Refusing incorrect RC version"
+          PY
+          if gh release view v1.1.1-rc.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.1.1-rc.1 already exists; preserving immutable tag"
+            exit 0
+          fi
+          gh release create v1.1.1-rc.1 \\
+            --repo "$GITHUB_REPOSITORY" \\
+            --target "$GITHUB_SHA" \\
+            --prerelease \\
+            --title "Ariston Cube 1.1.1-rc.1 — Gas Energy Hour Alignment on Cube S Editor 1.1.0" \\
+            --notes-file docs/releases/v1.1.1-rc.1.md

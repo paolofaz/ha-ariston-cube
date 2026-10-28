@@ -33,6 +33,7 @@ async def async_setup(hass, config) -> bool:
     from homeassistant.config_entries import ConfigEntryState
 
     from .api import AristonError
+    from .energy_alignment import AlignmentRejected, EnergyHourAligner
 
     schema = vol.Schema({
         vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(min=0, max=6)),
@@ -295,6 +296,61 @@ async def async_setup(hass, config) -> bool:
         supports_response=SupportsResponse.ONLY,
     )
 
+    def get_energy_aligner():
+        """Use only the existing Smc coordinator and existing sensor identities."""
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if len(entries) != 1:
+            raise HomeAssistantError("Exactly one loaded Ariston Cube entry required")
+        coordinator = entries[0].runtime_data
+        if getattr(coordinator, "smc_coordinator", None) is None:
+            raise HomeAssistantError("Gas coordinator is not ready")
+        aligner = getattr(coordinator, "energy_hour_aligner", None)
+        if aligner is None:
+            aligner = EnergyHourAligner(hass, coordinator)
+            coordinator.energy_hour_aligner = aligner
+        return aligner
+
+    async def preview_energy_hour(call):
+        try:
+            return await get_energy_aligner().preview()
+        except AlignmentRejected as exc:
+            raise HomeAssistantError(str(exc)) from exc
+
+    async def inspect_energy_hour(call):
+        """READ ONLY: inspect existing hourly sums without any Recorder writes."""
+        try:
+            return await get_energy_aligner().inspect_hour(call.data["target_start"])
+        except AlignmentRejected as exc:
+            raise HomeAssistantError(str(exc)) from exc
+
+    async def apply_energy_hour(call):
+        """Exactly one fingerprint-guarded manual correction per eligible sensor."""
+        try:
+            return await get_energy_aligner().apply(call.data["fingerprint"])
+        except AlignmentRejected as exc:
+            raise HomeAssistantError(str(exc)) from exc
+
+    hass.services.async_register(
+        DOMAIN, "preview_energy_hour_alignment", preview_energy_hour,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "inspect_energy_hour_alignment", inspect_energy_hour,
+        schema=vol.Schema({vol.Required("target_start"): str}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "apply_energy_hour_alignment", apply_energy_hour,
+        schema=vol.Schema({
+            vol.Required("fingerprint"): vol.Match(r"^[a-f0-9]{64}$"),
+            vol.Required("confirm"): vol.Equal(True),
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     hass.services.async_register(
         DOMAIN, "probe_weekly_methods", probe_weekly,
         supports_response=SupportsResponse.ONLY,
@@ -311,7 +367,7 @@ PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CLIMATE, Platform
 
 async def async_setup_entry(hass, entry) -> bool:
     """Use a token-authenticated client and fetch the initial snapshot."""
-    _LOGGER.info("Ariston Cube 1.1.0 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
+    _LOGGER.info("Ariston Cube 1.1.1-rc.1 starting; platforms=%s", ", ".join(str(getattr(p, "value", p)) for p in PLATFORMS))
     session = async_get_clientsession(hass)
     # Cookie-based R2 login must never share the mobile bearer-token session.
     web_session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
@@ -333,7 +389,7 @@ async def async_setup_entry(hass, entry) -> bool:
     except Exception as exc:  # noqa: BLE001
         # Optional UI must never prevent boiler entity setup.
         _LOGGER.warning("Cube S weekly card could not be registered: %s", type(exc).__name__)
-    _LOGGER.info("Ariston Cube 1.1.0 platform setup dispatched")
+    _LOGGER.info("Ariston Cube 1.1.1-rc.1 platform setup dispatched")
     return True
 
 

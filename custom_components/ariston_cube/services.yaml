@@ -249,3 +249,50 @@ clone_weekly_days:
       required: true
       selector:
         boolean:
+
+preview_energy_hour_alignment:
+  name: "TEST – preview Energy gas hour correction"
+  description: >
+    READ-ONLY. Compare the latest closed two-hour Ariston Smc bucket with
+    the two existing hourly Recorder statistics rows for BOTH cumulative
+    gas sensors. Does not modify any values, the gas ledger, or Recorder.
+    Only the latest completed hourly pair is eligible; older history is not touched.
+
+apply_energy_hour_alignment:
+  name: "TEST – reattribute one completed Energy hour"
+  description: >
+    EXPERIMENTAL: modify exactly one already-compiled hourly statistics row
+    per existing Ariston Cube cumulative gas sensor, after confirming the
+    previous preview fingerprint. Does not change sensor values or previous
+    history; no automatic retries. A wrong result can affect future Energy
+    presentation, so test with a Recorder backup and verify the results.
+  fields:
+    fingerprint:
+      name: "Fingerprint from preview"
+      description: "64 hexadecimal characters returned by the preview action."
+      required: true
+      selector:
+        text:
+    confirm:
+      name: "Authorize hourly statistics correction"
+      description: "Must be true. This writes existing Recorder statistics."
+      required: true
+      selector:
+        boolean:
+
+inspect_energy_hour_alignment:
+  name: "TEST – inspect a completed Energy hour (read-only)"
+  description: >
+    READ-ONLY: inspect an existing hourly Recorder row and its adjacent
+    hours for both current gas sensor IDs. No statistics import, no sensor
+    update, no gas ledger mutation. Use to check the first manual correction
+    after an ambiguous write result.
+  fields:
+    target_start:
+      name: "Hour to inspect in UTC ISO 8601"
+      description: >
+        Example for Italian 07:00–08:00 on 2026-10-28:
+        2026-10-28T06:00:00+00:00. Only the last 72 hours.
+      required: true
+      selector:
+        text:

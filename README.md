@@ -1,3 +1,10 @@
+> **EXPERIMENTAL 1.1.1-rc.1 — gas-hour test on stable 1.1.0.**
+> Keeps the entire stable Cube S weekly editor, including **Clona giorno**,
+> and adds manually confirmed Energy gas-hour shift/inspection actions.
+> Existing gas sensor IDs, cumulative readings, Smc ledger, and prior HA
+> Energy history are preserved. **No automatic correction yet.**
+> [Step-by-step 15:15 test](docs/releases/v1.1.1-rc.1.md).
+
 > **Stable v1.1.0 — Cube S weekly schedule editor.** On the Lovelace timetable, choose **Modifica fasce** to move an existing time, add a finite Comfort/Economy band with explicit start/end, remove a band, or **Clona giorno** onto multiple selected weekdays in one confirmed save. New times are selected in 15-minute increments. All writes require a fresh cloud preview, full-week fingerprint validation, explicit confirmation, a single POST and seven-day readback. [Release notes](docs/releases/v1.1.0.md).
 >
 > **Gas-hour alignment is still experimental and separate:** v1.0.2-rc.2 is not included in stable 1.1.0. Switching versions does not erase the existing gas cumulative sensor history or revert hourly Energy corrections, but it removes that RC's manual hour-alignment actions. Original stable v1.0.1 remains available by its tag.

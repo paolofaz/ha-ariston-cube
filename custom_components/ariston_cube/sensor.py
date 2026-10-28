@@ -66,6 +66,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = [AristonTemperature(coordinator, description) for description in DESCRIPTIONS]
     entities.append(AristonWeeklySchedule(schedule))
     smc = AristonSmcCoordinator(hass, coordinator, entry_id=entry.entry_id)
+    # Read-only pointer for the optional manual Energy-hour test. No new
+    # sensor, state, unique ID, ledger offset or saved checkpoint is touched.
+    coordinator.smc_coordinator = smc
     entities.extend([
         AristonCumulativeGas(smc, "total_heating_smc", "heating_gas_cumulative"),
         AristonCumulativeGas(smc, "total_dhw_smc", "dhw_gas_cumulative"),
