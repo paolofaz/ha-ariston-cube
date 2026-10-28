@@ -146,9 +146,19 @@ def test_metadata_is_never_lost_from_source():
     with pytest.raises(ValueError, match="metadata"):
         build(raw, "add", to_time="12:00", preset="Economy")
     raw = source()
-    raw["ChZn1"]["unexpected"] = "do_not_lose"
-    with pytest.raises(ValueError, match="zone metadata"):
-        build(raw, "remove", from_time="06:00")
+    raw["ChZn1"]["extra_cloud_metadata"] = {"unknown": [1, 2, 3]}
+    # The live rc.3 write format sends only the plans; extra zone keys are
+    # retained in the source fingerprint, not sent in the POST envelope.
+    source_copy = deepcopy(raw)
+    body, expected, _ = build(raw, "remove", from_time="06:00")
+    assert set(body) == {"plans"}
+    assert raw == source_copy
+    assert expected["days"]["Lunedì"][1]["time"] == "21:30"
+    assert changes.confirm_weekly_write(
+        {"ChZn1": {"plans": body["plans"],
+                   "extra_cloud_metadata": raw["ChZn1"]["extra_cloud_metadata"]}},
+        expected,
+    )
 
 
 def test_cloud_readback_needs_all_days_exact():
@@ -168,3 +178,40 @@ def test_previews_never_touch_network_or_user_gas_data():
     assert "async " not in module
     assert "async_write" not in module
     assert "gas_ledger" not in module
+
+
+@pytest.mark.parametrize("op,params", [
+    ("add", {"to_time": "12:00", "preset": "Economy"}),
+    ("remove", {"from_time": "06:00"}),
+    ("move", {"from_time": "06:00", "to_time": "06:15"}),
+])
+def test_realistic_extra_zone_metadata_uses_field_tested_rc3_post_shape(
+        op, params):
+    raw = source()
+    raw["ChZn1"].update({
+        "zone": {"id": "opaque cloud data", "attributes": [1, 2]},
+        "editable": True,
+        "unknown_nested_property": {"revision": 17},
+    })
+    original = deepcopy(raw)
+    fingerprint = preview.weekly_read_fingerprint(raw)
+    body, expected, _ = build(raw, op, **params)
+    assert set(body) == {"plans"}
+    assert raw == original
+    assert changes.confirm_weekly_write(
+        {"ChZn1": {**raw["ChZn1"], "plans": body["plans"]}}, expected
+    )
+    changed_metadata = deepcopy(raw)
+    changed_metadata["ChZn1"]["unknown_nested_property"]["revision"] = 18
+    with pytest.raises(ValueError, match="changed since preview"):
+        changes.build_weekly_change(
+            changed_metadata, 1, op, expected_fingerprint=fingerprint, **params
+        )
+
+
+def test_extra_nested_slice_metadata_is_still_rejected_even_with_zone_metadata():
+    raw = source()
+    raw["ChZn1"]["optional_zone_data"] = [1, 2]
+    raw["ChZn1"]["plans"][1]["slices"][1]["unknown"] = "do_not_erase"
+    with pytest.raises(ValueError, match="metadata"):
+        build(raw, "add", to_time="12:00", preset="Economy")
