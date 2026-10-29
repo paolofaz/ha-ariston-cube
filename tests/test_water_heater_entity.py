@@ -88,7 +88,7 @@ def load(monkeypatch):
     return module, Error, registry
 
 
-def test_only_temperature_feature_and_read_only_current_mode(monkeypatch):
+def test_only_temperature_feature_and_fixed_on_state(monkeypatch):
     module, _, _ = load(monkeypatch)
     coordinator = types.SimpleNamespace(data={
         "DhwTemp": {"value": 49, "min": 39, "max": 57, "step": 1},
@@ -99,11 +99,22 @@ def test_only_temperature_feature_and_read_only_current_mode(monkeypatch):
     assert entity._attr_supported_features == 1
     assert entity.target_temperature == 49
     assert entity.current_temperature == 44.5
-    assert entity.current_operation == "always_active"
+    assert entity.current_operation == "on"
     assert (entity.min_temp, entity.max_temp) == (39, 57)
     assert entity.available
     assert not hasattr(entity, "async_set_operation_mode")
     assert not hasattr(entity, "operation_list")
+
+
+@pytest.mark.parametrize("dhw_mode", [None, 0, 1, 2, 3, 4, 5, 99])
+def test_on_state_independent_of_dhw_cloud_mode(monkeypatch, dhw_mode):
+    module, _, _ = load(monkeypatch)
+    data = {"DhwTemp": {"value": 49, "min": 36, "max": 60}}
+    if dhw_mode is not None:
+        data["DhwMode"] = {"value": dhw_mode}
+    entity = module.AristonDhwWaterHeater(types.SimpleNamespace(data=data))
+    assert entity.available
+    assert entity.current_operation == "on"
 
 
 def test_missing_storage_probe_stays_none_not_target_temperature(monkeypatch):
@@ -112,6 +123,7 @@ def test_missing_storage_probe_stays_none_not_target_temperature(monkeypatch):
     ent = module.AristonDhwWaterHeater(coord)
     assert ent.target_temperature == 51
     assert ent.current_temperature is None
+    assert ent.current_operation == "on"
     assert ent.available
     coord.data = {}
     assert not ent.available

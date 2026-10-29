@@ -1,4 +1,7 @@
-"""Domestic hot water target-only control; no selectable operating modes.
+"""DHW temperature control with a fixed informational on state.
+
+The entity's state is independent of Ariston DhwMode and Comfort ACS.
+It does not imply the burner or the whole boiler is operating.
 
 Uses the already validated mobile DhwTemp setpoint API. Comfort ACS remains
 a separate R2-backed switch and can be displayed alongside this entity.
@@ -17,7 +20,6 @@ from homeassistant.helpers import entity_registry as er
 
 from .entity import AristonEntity
 from .model import as_temperature
-from .states import hot_water_operation
 
 _LOGGER = logging.getLogger(__name__)
 _HARD_MIN = 36.0
@@ -51,7 +53,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
 
 class AristonDhwWaterHeater(AristonEntity, WaterHeaterEntity):
-    """A temperature-only Home Assistant water heater (no mode selector)."""
+    """Temperature-only water heater; no operation mode or on/off commands."""
 
     _attr_name = "Acqua calda sanitaria"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -84,9 +86,9 @@ class AristonDhwWaterHeater(AristonEntity, WaterHeaterEntity):
         return measured if measured is not None and 0 <= measured <= 100 else None
 
     @property
-    def current_operation(self) -> str | None:
-        # Read-only reported state. No OPERATION_MODE feature or command.
-        return hot_water_operation(self.coordinator.data or {})
+    def current_operation(self) -> str:
+        # Display-only: never follow DhwMode or the separate Comfort ACS switch.
+        return "on"
 
     @property
     def min_temp(self) -> float:

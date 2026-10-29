@@ -6,7 +6,7 @@
 
 **Controllo del termostato Ariston Cube S, programmazione settimanale e consumi gas in Home Assistant.** Integrazione comunitaria per **Ariston CLAS ONE 30L + Cube S**, collegata ad Ariston NET.
 
-> **Versione stabile: 1.3.0.** Comandi Lovelace reattivi, editor settimanale completo, clonazione dei giorni e allineamento automatico delle statistiche Energia del gas. Funzionalità verificate sul Cube S reale; il comportamento può variare con altri modelli o versioni cloud.
+> **Versione stabile: 1.3.1.** Comandi Lovelace reattivi, editor settimanale completo, clonazione dei giorni e allineamento automatico delle statistiche Energia del gas. Funzionalità verificate sul Cube S reale; il comportamento può variare con altri modelli o versioni cloud.
 >
 > **Progetto indipendente, non ufficiale Ariston.** Le API cloud potrebbero cambiare. L'interfaccia può mostrare temporaneamente un comando richiesto prima che la caldaia lo confermi.
 
@@ -19,12 +19,22 @@
 | **Clima Cube S** | Temperatura ambiente, temperatura obiettivo, OFF / HEAT (Manuale) / AUTO (programma settimanale originale) |
 | **Comandi reattivi** | Cambio immediato nella vista Lovelace, lettura cloud di conferma, ripristino in caso di errore |
 | **Riscaldamento** | Temperature Comfort / Economy, selettore AUTO / Manuale, modalità generale della caldaia, termoregolazione |
-| **Acqua calda** | Entità `water_heater` per target ACS, switch separato Comfort ACS |
+| **Acqua calda** | Entità `water_heater` per il setpoint ACS, con stato informativo fisso `on` quando disponibile e switch Comfort ACS separato |
 | **Programma Cube S** | Sensore, calendario, scheda settimanale: sposta, aggiungi, elimina fasce e **Clona giorno** |
 | **Gas ed Energia** | Due sensori cumulativi Smc (riscaldamento / ACS), attribuzione automatica corretta delle fasce biorarie |
 | **Diagnostica** | Stato degli ultimi cicli automatici e ispezione in **sola lettura** delle statistiche di un'ora |
 
 Non è necessario sostituire la programmazione interna del Cube S: **AUTO continua a seguire quella vera**.
+
+### Acqua calda sanitaria (ACS)
+
+L'entità `water_heater` regola la **temperatura obiettivo ACS** e, se disponibile,
+mostra sempre lo stato informativo `on`, indipendentemente da `DhwMode` e
+dallo switch **Comfort ACS**. Questo stato non indica che la caldaia o il
+bruciatore siano fisicamente accesi. Il `water_heater` non espone comandi per
+accendere/spegnere l'ACS o cambiarne la modalità; lo switch Comfort ACS
+rimane indipendente. Temperature, limiti e conferma cloud dei comandi sono
+invariati.
 
 ## Compatibilità e prerequisiti
 
@@ -41,11 +51,11 @@ Non viene garantito il supporto di altri modelli o installazioni multizona. Il g
 
 1. In **HACS → menu ⋮ → Repository personalizzati**, aggiungi
    `https://github.com/paolofaz/ha-ariston-cube` come **Integrazione**. Finché HACS non approva l'inclusione nel catalogo predefinito, usa il repository personalizzato.
-2. Installa **Ariston Cube**, scegliendo la release stabile più recente (**v1.3.0**).
+2. Installa **Ariston Cube**, scegliendo la release stabile più recente (**v1.3.1**).
 3. **Riavvia Home Assistant**.
 4. In **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**, cerca **Ariston Cube**; inserisci le credenziali Ariston NET e seleziona la caldaia.
 
-**Aggiornamento dalla 1.2.0 o da una RC:** aggiorna e riavvia. **Non eliminare la configurazione**, la cartella `.storage` o il database Recorder; nessun reset dei sensori gas è necessario. I cambiamenti di programma salvati sul Cube S restano nel cloud.
+**Aggiornamento da una versione precedente:** aggiorna e riavvia. **Non eliminare la configurazione**, la cartella `.storage` o il database Recorder; nessun reset dei sensori gas è necessario. I cambiamenti di programma salvati sul Cube S restano nel cloud.
 
 ### Installazione manuale
 
@@ -119,7 +129,7 @@ L'allineamento è stato verificato sul campo, con **0,50 Smc riscaldamento + 0,0
 
 **Protezioni:** verifica del bucket, fingerprint, stato e somme Recorder, salvataggio singolo per sensore, verifica della scrittura, nessun retry automatico dopo un esito incerto. Se mancano dati o il consumo è zero / già allineato, non forza alcuna correzione. Non recupera automaticamente le fasce perse durante un'interruzione.
 
-**Non modificare gli ID dei due sensori cumulativi, non cancellare gli offset o il ledger e non azzerare Recorder.** La 1.3.0 conserva lo stato e la storia Energia delle versioni precedenti.
+**Non modificare gli ID dei due sensori cumulativi, non cancellare gli offset o il ledger e non azzerare Recorder.** La 1.3.1 conserva lo stato e la storia Energia delle versioni precedenti.
 
 ## Azioni in Strumenti per sviluppatori
 
@@ -179,6 +189,7 @@ python -m pytest -q
 node --test tests/test_weekly_editor.mjs
 ```
 
+- [Novità della 1.3.1](docs/releases/v1.3.1.md)
 - [Novità della 1.3.0](docs/releases/v1.3.0.md)
 - [Documentazione installazione nel catalogo HACS](docs/HACS_PUBLICATION.md)
 - [Issue tracker](https://github.com/paolofaz/ha-ariston-cube/issues)

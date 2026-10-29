@@ -4,7 +4,7 @@
 **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using Ariston NET.
 This is **not an official Ariston project**.
 
-Stable release: **v1.3.0**. Verified on a Cube S and Home Assistant Core /
+Stable release: **v1.3.1**. Verified on a Cube S and Home Assistant Core /
 Container 2026.10.4. Minimum version advertised to HACS: 2026.10.0.
 Other Ariston models and multi-zone installations are not guaranteed.
 
@@ -18,8 +18,10 @@ Other Ariston models and multi-zone installations are not guaranteed.
   bounded Comfort/Economy additions, removals and **Clone day** to multiple
   destinations. Every change requires preview, explicit confirmation,
   fingerprint validation and exact seven-day readback.
-- DHW temperature via Home Assistant `water_heater` and a separate
-  ACS Comfort switch.
+- DHW target temperature via Home Assistant `water_heater` and a separate
+  ACS Comfort switch. When available, the water heater reports the display-only
+  state `on` independently of `DhwMode` and ACS Comfort; this does not
+  indicate that the burner is physically on.
 - Two long-lived cumulative heating/DHW gas meters using physical **Smc**
   measurements, plus guarded automatic two-hour bucket alignment for the
   Energy dashboard, at :15 past odd local hours.
@@ -30,7 +32,7 @@ Other Ariston models and multi-zone installations are not guaranteed.
 
 Use HACS → **Custom repositories** → paste
 `https://github.com/paolofaz/ha-ariston-cube` and select **Integration**.
-Install stable **v1.3.0**, restart Home Assistant, then add **Ariston Cube**
+Install stable **v1.3.1**, restart Home Assistant, then add **Ariston Cube**
 under **Settings → Devices & services**, with your Ariston NET login.
 
 While this integration is not yet admitted to HACS's default repository
