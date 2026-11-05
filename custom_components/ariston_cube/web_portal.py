@@ -19,6 +19,7 @@ import aiohttp
 from yarl import URL
 
 from .const import BASE_URL
+from .rate_limit import RateLimitActive, RateLimitBackoff
 
 _TOKEN_RE = re.compile(
     r"""<input\b(?=[^>]*\bname=["']__RequestVerificationToken["'])(?=[^>]*\bvalue=["']([^"']+)["'])[^>]*>""",
@@ -91,17 +92,25 @@ def comfort_option_code(raw: Any) -> int | None:
 class AristonWebPortal:
     """Serializes /R2 requests; never mixes mobile and web authentication."""
 
-    def __init__(self, session: aiohttp.ClientSession, username: str, password: str):
+    def __init__(
+        self, session: aiohttp.ClientSession, username: str, password: str,
+        *, rate_limit: RateLimitBackoff | None = None,
+    ):
         self._session = session
         self._username = username
         self._password = password
         self._logged_in = False
         self._lock = asyncio.Lock()
+        self._rate_limit = rate_limit if rate_limit is not None else RateLimitBackoff()
         self._web_login_blocked_until = 0.0
         self._blocked_login_http_status: int | None = None
 
     async def _login(self) -> None:
-        """Use official R2 anti-CSRF cookie login, once per session."""
+        """Use the existing R2 anti-CSRF cookie login, once per session."""
+        try:
+            self._rate_limit.check()
+        except RateLimitActive as exc:
+            raise WebPortalAuthError("Web login form HTTP 429 (cooldown active)") from exc
         if self._logged_in:
             return
         if time.monotonic() < self._web_login_blocked_until:
@@ -117,7 +126,9 @@ class AristonWebPortal:
                 max_redirects=5,
             ) as response:
                 if response.status != 200:
-                    if response.status in (403, 429):
+                    if response.status == 429:
+                        self._rate_limit.record_429(getattr(response, "headers", None))
+                    elif response.status == 403:
                         self._web_login_blocked_until = (
                             time.monotonic() + _FORBIDDEN_RETRY_DELAY_SECONDS
                         )
@@ -148,6 +159,8 @@ class AristonWebPortal:
                 allow_redirects=False,
             ) as response:
                 if response.status != 200:
+                    if response.status == 429:
+                        self._rate_limit.record_429(getattr(response, "headers", None))
                     raise WebPortalAuthError(f"Web login POST HTTP {response.status}")
                 try:
                     data = await response.json(content_type=None)
@@ -156,6 +169,7 @@ class AristonWebPortal:
             if not isinstance(data, dict) or data.get("ok") is not True:
                 raise WebPortalAuthError("Web portal rejected login")
             self._logged_in = True
+            self._rate_limit.record_success()
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise WebPortalAuthError(
                 f"Web portal {type(exc).__name__} during login"
@@ -163,6 +177,10 @@ class AristonWebPortal:
 
     async def _request(self, method: str, path: str, *, payload: Any = None) -> Any:
         """Authenticated web request with no retries on POST or errors."""
+        try:
+            self._rate_limit.check()
+        except RateLimitActive as exc:
+            raise WebPortalError("Ariston HTTP 429 cooldown active") from exc
         try:
             async with self._session.request(
                 method, BASE_URL + path,
@@ -174,10 +192,15 @@ class AristonWebPortal:
                 if response.status in (301, 302, 303, 401, 403):
                     self._logged_in = False
                     raise WebPortalAuthError("Web portal authorization failed")
+                if response.status == 429:
+                    self._rate_limit.record_429(getattr(response, "headers", None))
+                    raise WebPortalError("Web portal HTTP 429")
                 if response.status != 200:
                     raise WebPortalError(f"Web portal HTTP {response.status}")
                 try:
-                    return await response.json(content_type=None)
+                    result = await response.json(content_type=None)
+                    self._rate_limit.record_success()
+                    return result
                 except (ValueError, json.JSONDecodeError, aiohttp.ContentTypeError):
                     raise WebPortalError("Web portal returned non-JSON") from None
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:

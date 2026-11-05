@@ -13,6 +13,7 @@ from typing import Any
 import aiohttp
 
 from .const import BASE_URL
+from .rate_limit import RateLimitActive, RateLimitBackoff
 from .model import make_main_request, parse_main_data, as_temperature, parse_plants
 from .commands import CommandRejected, build_setpoint_request, build_zone_mode_request, build_plant_control_request
 from .states import enum_code
@@ -65,13 +66,22 @@ class AristonClient:
         self._token: str | None = None
         self._features: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
-        self.web_portal = AristonWebPortal(web_session or session, username, password)
+        self.rate_limit = RateLimitBackoff()
+        self.web_portal = AristonWebPortal(
+            web_session or session, username, password, rate_limit=self.rate_limit
+        )
 
     async def _request(
         self, method: str, path: str, *,
         json_body: dict[str, Any] | None = None,
     ) -> Any:
         stage = _phase(path)
+        try:
+            self.rate_limit.check()
+        except RateLimitActive as exc:
+            raise AristonConnectionError(
+                f"Ariston HTTP 429 cooldown active at {stage}"
+            ) from exc
         headers = {
             "User-Agent": MOBILE_USER_AGENT,
             "ar.authToken": self._token or "",
@@ -83,14 +93,19 @@ class AristonClient:
             ) as response:
                 if response.status in (401, 403, 405):
                     raise AristonAuthError(f"Ariston HTTP {response.status} at {stage}")
-                if response.status in (408, 425, 429) or response.status >= 500:
+                if response.status == 429:
+                    self.rate_limit.record_429(getattr(response, "headers", None))
+                    raise AristonConnectionError(f"Ariston HTTP 429 at {stage}")
+                if response.status in (408, 425) or response.status >= 500:
                     raise AristonConnectionError(f"Ariston HTTP {response.status} at {stage}")
                 if response.status >= 400:
                     raise AristonResponseError(f"Ariston HTTP {response.status} at {stage}")
                 if "/account/login" in response.url.path.lower():
                     raise AristonAuthError(f"Redirected to web login at {stage}")
                 try:
-                    return await response.json(content_type=None)
+                    result = await response.json(content_type=None)
+                    self.rate_limit.record_success()
+                    return result
                 except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError) as exc:
                     raise AristonResponseError(f"Non-JSON cloud reply at {stage}") from exc
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
@@ -317,11 +332,22 @@ class AristonClient:
                 "ar.authToken": self._token or "",
             }
             try:
+                try:
+                    self.rate_limit.check()
+                except RateLimitActive as exc:
+                    raise AristonConnectionError(
+                        "Ariston HTTP 429 cooldown active at cloud_probe"
+                    ) from exc
                 async with self._session.request(
                     "OPTIONS", BASE_URL + path, headers=headers,
                     timeout=aiohttp.ClientTimeout(total=25),
                     allow_redirects=False,
                 ) as response:
+                    if response.status == 429:
+                        self.rate_limit.record_429(getattr(response, "headers", None))
+                        raise AristonConnectionError("Ariston HTTP 429 at cloud_probe")
+                    if response.status < 400:
+                        self.rate_limit.record_success()
                     allow = response.headers.get("Allow", "")
                     cors = response.headers.get("Access-Control-Allow-Methods", "")
                     # Only ordinary verb names; do not expose any other
