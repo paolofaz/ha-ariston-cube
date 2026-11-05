@@ -1,8 +1,8 @@
-# Ariston Cube · English quick guide
+# Ariston Cube · English quick guide (unofficial)
 
 **Community Home Assistant integration**, independently developed for the
 **Ariston CLAS ONE 30L boiler and Cube S thermostat**, using Ariston NET.
-This is **not an official Ariston project**.
+This is **not affiliated with, endorsed by, or supported by Ariston Group**. Ariston product names are used only to identify compatibility. The integration relies on unofficial cloud interfaces which can change without notice. See the prominent [independence and cloud API disclaimer](../README.md).
 
 Stable release: **v1.3.1**. Verified on a Cube S and Home Assistant Core /
 Container 2026.10.4. Minimum version advertised to HACS: 2026.10.0.
@@ -86,8 +86,8 @@ data:
   target_start: "2026-10-28T14:00:00+00:00"
 ```
 
-For full Italian documentation, screenshots/controls instructions and
-troubleshooting, return to the [main README](../README.md).
+For full English documentation, installation instructions, controls, and
+troubleshooting, see the [main README](../README.md).
 
 [Latest releases](https://github.com/paolofaz/ha-ariston-cube/releases) ·
 [Report an issue](https://github.com/paolofaz/ha-ariston-cube/issues) ·

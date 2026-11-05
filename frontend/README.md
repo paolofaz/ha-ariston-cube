@@ -1,29 +1,23 @@
-# Scheda settimanale Ariston Cube S · Home Assistant
+# Cube S weekly schedule card for Home Assistant
 
-La scheda Lovelace `custom:ariston-cube-weekly-card` è inclusa
-nell'integrazione **Ariston Cube 1.3.0 stabile**. Mostra il programma reale
-settimanale del Cube S e permette di modificarlo con conferma esplicita.
+The `custom:ariston-cube-weekly-card` Lovelace card is bundled with the **Ariston Cube** community integration (available since v1.3.0). It displays the **real Cube S weekly schedule** and allows carefully confirmed edits.
 
-## Funzioni della scheda
+> **Unofficial project.** This card is not affiliated with, endorsed by, or supported by Ariston Group. See the [independence and cloud API disclaimer](../README.md) before use.
 
-- **Sposta orario**: sposta un cambio Comfort/Economy esistente su uno
-  degli orari di 15 minuti.
-- **Aggiungi fascia**: scegli ora iniziale, ora finale e preset
-  Comfort/Economy; il programma precedente riprende all'ora finale.
-- **Elimina fascia**: rimuovi un cambio orario; viene eliminata anche
-  l'eventuale fascia di ripristino diventata ridondante.
-- **Clona giorno**: scegli un giorno sorgente e uno o più giorni
-  destinatari. La scheda confronta gli orari **prima/dopo** per ciascuno.
+## Card features
 
-Ogni operazione segue **Anteprima → approvazione → un singolo POST cloud**
-con validazione del fingerprint e lettura dei programmi di tutti
-sette i giorni. Se una scrittura ha esito incerto, consulta l'app
-Ariston prima di tentare un'altra modifica.
+- **Move time:** move an existing Comfort/Economy transition in 15-minute increments.
+- **Add time block:** choose start/end times and a Comfort/Economy preset; the previous preset resumes at the end.
+- **Delete time block:** remove an existing transition, including any redundant return boundary.
+- **Clone day:** choose a source day and one or more destination days. Review the **before/after** schedule for each destination.
 
-## Installazione automatica e manuale
+Each operation follows **Preview → explicit confirmation → a single cloud POST**, with schedule fingerprint validation and readback of all seven days. If the write result is uncertain, inspect the official Ariston app before attempting another change.
 
-Con dashboard **Storage**, la risorsa JS è registrata automaticamente.
-Con dashboard **YAML**, aggiungi una risorsa di tipo modulo:
+## Automatic and manual installation
+
+On **Storage-mode** dashboards, the JS resource is registered automatically.
+
+For **YAML-mode** dashboards, register it as a module resource:
 
 ```yaml
 resources:
@@ -31,41 +25,35 @@ resources:
     type: module
 ```
 
-Per usare la scheda, aggiungi manualmente (sostituendo l'ID
-con quello reale del sensore settimanale):
+To add the card, use a manual card with your **actual** weekly schedule sensor entity ID:
 
 ```yaml
 type: custom:ariston-cube-weekly-card
-entity: sensor.SOSTITUISCI_CON_IL_TUO_ID_REALE
-title: Programma riscaldamento Cube S
+entity: sensor.YOUR_ACTUAL_WEEKLY_SCHEDULE_ENTITY_ID
+title: Cube S weekly heating
 ```
 
-Se visualizzi una vecchia versione, aggiorna l'URL della risorsa e
-svuota la cache del browser.
+If an old card version appears after an update, refresh the resource URL and clear the browser cache.
 
-## Alternativa: JavaScript copiato manualmente
+## Alternative: copy the JavaScript manually
 
-Se non usi la risorsa servita dall'integrazione, puoi copiare
-`frontend/ariston-cube-weekly-card.js` nella cartella
-`<config>/www/ariston-cube-weekly-card.js` di Home Assistant.
-In questo caso registra la risorsa **/local/ariston-cube-weekly-card.js**
-come modulo nella dashboard e assicurati di tenerne aggiornato
-il contenuto dopo gli upgrade. Il caricamento automatico
-`/ariston_cube/...` resta l'opzione raccomandata.
+If you do not use the resource served by the integration, you can copy
+`frontend/ariston-cube-weekly-card.js` into
+`<config>/www/ariston-cube-weekly-card.js` in Home Assistant.
 
-## Azioni sottostanti
+Then register `/local/ariston-cube-weekly-card.js` as a module resource in the dashboard and keep this file up to date whenever you upgrade. The automatically served `/ariston_cube/...` resource is recommended.
 
-Le operazioni usano **soltanto** le quattro azioni ufficiali:
-`ariston_cube.preview_weekly_change`,
-`ariston_cube.write_weekly_change`,
-`ariston_cube.preview_weekly_clone` e
-`ariston_cube.clone_weekly_days`.
+## Actions used by the card
 
-Non richiedono più azioni `TEST` o API sperimentali. Il salvataggio
-non viene mai ritentato automaticamente dopo una risposta ambigua.
+Editing uses **only** these four integration actions:
 
-Per il gas restano due azioni diagnostiche in sola lettura;
-l'automatismo gas della stabile 1.2.0 è invariato.
+- `ariston_cube.preview_weekly_change`
+- `ariston_cube.write_weekly_change`
+- `ariston_cube.preview_weekly_clone`
+- `ariston_cube.clone_weekly_days`
 
-[README principale](../README.md) ·
-[Note della stabile 1.3.0](../docs/releases/v1.3.0.md)
+Legacy `TEST` actions or experimental APIs are not required. Cloud writes are **never retried automatically** after an ambiguous response.
+
+Two additional **read-only** gas diagnostic actions remain available; automatic gas processing is unchanged.
+
+[Main README](../README.md) · [v1.3.0 release notes](../docs/releases/v1.3.0.md)
