@@ -8,6 +8,7 @@ on:
       - chore/**
       - release/**
   pull_request:
+  workflow_dispatch:
 
 jobs:
   tests:
@@ -54,15 +55,15 @@ jobs:
         uses: home-assistant/actions/hassfest@master
 
   stable-release:
-    name: Publish stable v1.3.1
+    name: Publish stable v1.3.3 (manual)
     needs: [tests, hassfest]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Publish immutable v1.3.1 after all validations pass
+      - name: Publish immutable v1.3.3 after all validations pass
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -72,17 +73,17 @@ jobs:
           version = json.loads(
               Path("custom_components/ariston_cube/manifest.json").read_text()
           )["version"]
-          assert version == "1.3.1", "Refusing incorrect stable release version"
+          assert version == "1.3.3", "Refusing incorrect stable release version"
           PY
-          if gh release view v1.3.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "v1.3.1 already exists; preserve existing tag and correct release title"
-            gh release edit v1.3.1 \
+          if gh release view v1.3.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.3.3 already exists; preserve existing tag and correct release title"
+            gh release edit v1.3.3 \
               --repo "$GITHUB_REPOSITORY" \
-              --title "Ariston Cube 1.3.1 — Stato ACS indipendente dal Comfort"
+              --title "Ariston Cube 1.3.3 — Shared HTTP 429 backoff"
             exit 0
           fi
-          gh release create v1.3.1 \
+          gh release create v1.3.3 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Ariston Cube 1.3.1 — Stato ACS indipendente dal Comfort" \
-            --notes-file docs/releases/v1.3.1.md
+            --title "Ariston Cube 1.3.3 — Shared HTTP 429 backoff" \
+            --notes-file docs/releases/v1.3.3.md
