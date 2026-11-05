@@ -14,7 +14,7 @@
 
 **Home Assistant integration for the Ariston Cube S thermostat, weekly heating schedules, and gas consumption.** Developed and tested with an **Ariston CLAS ONE 30L boiler + Cube S thermostat** connected to Ariston NET.
 
-> **Current stable version: v1.3.1.** Responsive Lovelace controls, a full weekly schedule editor, cloning days, and guarded automatic alignment of gas Energy statistics. Verified on a physical Cube S; other devices and cloud versions may behave differently.
+> **Stable release:** see the [latest GitHub release](https://github.com/paolofaz/ha-ariston-cube/releases/latest). Responsive Lovelace controls, a full weekly schedule editor, cloning days, and guarded automatic alignment of gas Energy statistics. Verified on a physical Cube S; other devices and cloud versions may behave differently.
 >
 > **Cloud confirmation matters.** Home Assistant may temporarily display a requested control value before the boiler confirms it. See [Responsive controls](#responsive-lovelace-controls-with-cloud-confirmation).
 
@@ -52,7 +52,7 @@ Other boiler models and multi-zone systems are **not guaranteed** to work. Gas t
 ### Via HACS
 
 1. In **HACS → ⋮ → Custom repositories**, add `https://github.com/paolofaz/ha-ariston-cube` with category **Integration**. Until accepted into the default HACS catalog, use this custom repository.
-2. Install **Ariston Cube**, selecting the latest stable release (currently **v1.3.1**).
+2. Install **Ariston Cube**, selecting the latest stable release.
 3. **Restart Home Assistant.**
 4. Go to **Settings → Devices & services → Add integration**, search for **Ariston Cube**, enter your Ariston NET credentials, and select your boiler.
 
