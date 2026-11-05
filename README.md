@@ -62,6 +62,12 @@ Other boiler models and multi-zone systems are **not guaranteed** to work. Gas t
 
 Copy the complete `custom_components/ariston_cube/` directory into `<config>/custom_components/ariston_cube/` in your Home Assistant configuration, restart Home Assistant, and configure the integration. Keep `www/`, `strings.json`, and `translations/` inside the integration directory.
 
+## Cloud rate limiting (v1.3.3)
+
+Under normal conditions, the main cloud polling interval stays at **60 seconds**. If Ariston NET responds with **HTTP 429 (Too Many Requests)**, the integration pauses **all new requests** from both its mobile API and R2 web portal clients for an adaptive cooldown: **5, 10, 20, 40, then up to 60 minutes** after repeated throttling. If Ariston provides a longer valid `Retry-After` header, that delay takes precedence. A successful cloud response after the cooldown resets the escalation.
+
+During a cooldown, Home Assistant may show temporarily unavailable or stale cloud data, and cloud commands cannot be sent. **No writes are queued or automatically retried.** The boiler's local controls and thermostat schedule continue operating independently. Regular scheduled polling resumes after the cooldown; interrupted gas/energy windows are **not automatically backfilled**.
+
 ## Responsive Lovelace controls with cloud confirmation
 
 When you change **AUTO ↔ Manual**, a target temperature, or the boiler operating mode, Lovelace immediately displays the requested value while the command is submitted through Ariston NET.
@@ -190,6 +196,7 @@ python -m pytest -q
 node --test tests/test_weekly_editor.mjs
 ```
 
+- [v1.3.3 release notes](docs/releases/v1.3.3.md)
 - [v1.3.1 release notes](docs/releases/v1.3.1.md)
 - [v1.3.0 release notes](docs/releases/v1.3.0.md)
 - [HACS catalog submission notes](docs/HACS_PUBLICATION.md)
