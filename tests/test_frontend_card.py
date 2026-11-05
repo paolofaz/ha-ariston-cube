@@ -35,4 +35,4 @@ def test_card_has_manual_local_resource_instructions():
     manual = (ROOT / "frontend/README.md").read_text(encoding="utf-8")
     assert "/local/ariston-cube-weekly-card.js" in manual
     assert "type: custom:ariston-cube-weekly-card" in manual
-    assert "SOSTITUISCI_CON_IL_TUO_ID_REALE" in manual
+    assert "YOUR_ACTUAL_WEEKLY_SCHEDULE_ENTITY_ID" in manual
