@@ -1,6 +1,6 @@
 {
   "domain": "ariston_cube",
-  "name": "Ariston Cube",
+  "name": "Ariston Cube Unofficial",
   "after_dependencies": [
     "lovelace",
     "recorder"
