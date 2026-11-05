@@ -179,11 +179,13 @@ data:
 
 If you encounter a problem, [open a GitHub issue](https://github.com/paolofaz/ha-ariston-cube/issues) with your Home Assistant version, integration version, boiler model, and relevant logs. **Never include passwords, access tokens, or private information.** Project support is community-provided, not Ariston support.
 
-## Support the project
+# 🍺 Support the Project
 
-If you find this independent project useful and would like to support the development, you can buy me a beer.
+If you found this project useful and want to support my work, you can offer me a beer:
 
 [![Buy Me a Beer](https://img.shields.io/badge/Buy%20Me%20a%20Beer-0070ba?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/PaoloFazari)
+
+
 
 ## Development and contributing
 
