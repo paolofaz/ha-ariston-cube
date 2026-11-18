@@ -13,6 +13,22 @@ _BY_CODE = {code: name for name, code in _OPTIONS.items()}
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    coordinator = entry.runtime_data
+    # One local timer per plant; the existing cloud modes are unchanged.
+    if getattr(entry, "entry_id", None) is not None:
+        from .schedule_coordinator import get_or_create_weekly_coordinator
+        from .temporary_manual import TemporaryManualController
+
+        weekly = get_or_create_weekly_coordinator(hass, entry)
+        temporary = TemporaryManualController(hass, entry, coordinator, weekly)
+        coordinator.temporary_manual = temporary
+        try:
+            await temporary.async_initialize()
+        except Exception:
+            temporary.stop()
+            coordinator.temporary_manual = None
+            raise
+        entry.async_on_unload(temporary.stop)
     async_add_entities([
         AristonPlantModeSelect(entry.runtime_data),
         AristonZoneProgrammeSelect(entry.runtime_data),
@@ -62,7 +78,7 @@ class AristonZoneProgrammeSelect(AristonEntity, SelectEntity):
     """Select Cube S time programme or manual mode, never plant operation."""
 
     _attr_name = "Modalità riscaldamento"
-    _attr_options = list(_ZONE_PROGRAM_OPTIONS)
+    _attr_options = [*_ZONE_PROGRAM_OPTIONS, "Manuale temporaneo"]
     _attr_icon = "mdi:calendar-clock"
 
     def __init__(self, coordinator):
@@ -71,12 +87,20 @@ class AristonZoneProgrammeSelect(AristonEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         data = getattr(self.coordinator, "display_data", self.coordinator.data) or {}
-        return _ZONE_PROGRAM_BY_CODE.get(enum_code(data.get("ZoneMode")))
+        code = enum_code(data.get("ZoneMode"))
+        temporary = getattr(self.coordinator, "temporary_manual", None)
+        if code == 2 and temporary is not None and temporary.active:
+            return "Manuale temporaneo"
+        return _ZONE_PROGRAM_BY_CODE.get(code)
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         feedback = getattr(self.coordinator, "command_feedback", lambda *keys: {})
-        return feedback("ZoneMode")
+        temporary = getattr(self.coordinator, "temporary_manual", None)
+        return {
+            **feedback("ZoneMode"),
+            **(temporary.attributes() if temporary is not None else {}),
+        }
 
     @property
     def available(self) -> bool:
@@ -102,10 +126,16 @@ class AristonZoneProgrammeSelect(AristonEntity, SelectEntity):
         return set(_ZONE_PROGRAM_OPTIONS.values()).issubset(allowed)
 
     async def async_select_option(self, option: str) -> None:
-        if option not in _ZONE_PROGRAM_OPTIONS:
+        if option not in (*_ZONE_PROGRAM_OPTIONS, "Manuale temporaneo"):
             raise HomeAssistantError("Modalità riscaldamento non supportata")
         if not self.available:
             raise HomeAssistantError("Modalità riscaldamento non disponibile")
-        # Exactly the same guarded mobile command and readback as climate
-        # AUTO/HEAT. The shared coordinator refreshes both entity states.
-        await self.coordinator.async_set_zone_mode(_ZONE_PROGRAM_OPTIONS[option])
+        temporary = getattr(self.coordinator, "temporary_manual", None)
+        if option == "Manuale temporaneo":
+            if temporary is None:
+                raise HomeAssistantError("Gestione Manuale temporaneo non disponibile")
+            await temporary.async_activate()
+        elif temporary is not None:
+            await temporary.async_select_permanent(_ZONE_PROGRAM_OPTIONS[option])
+        else:
+            await self.coordinator.async_set_zone_mode(_ZONE_PROGRAM_OPTIONS[option])

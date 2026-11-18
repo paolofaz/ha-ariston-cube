@@ -24,7 +24,7 @@
 | --- | --- |
 | **Cube S climate** | Room temperature, target temperature, OFF / HEAT (manual) / AUTO (original weekly schedule) |
 | **Responsive controls** | Immediate UI feedback, cloud readback confirmation, and rollback on failure |
-| **Heating** | Comfort / Economy temperatures, AUTO / Manual selection, boiler operating mode, thermoregulation |
+| **Heating** | Comfort / Economy temperatures, AUTO / Manual / temporary Manual selection, boiler operating mode, thermoregulation |
 | **Domestic hot water (DHW)** | `water_heater` target temperature and a separate DHW Comfort switch |
 | **Cube S weekly schedule** | Sensor, calendar, custom weekly card: move, add, delete time blocks, and **Clone day** |
 | **Gas and Energy** | Separate cumulative standard-cubic-metre (Smc) sensors for heating / DHW, guarded automatic attribution of two-hour consumption buckets |
@@ -88,6 +88,30 @@ The underlying command sequence is **fresh cloud read → one POST → confirmat
 | `non_confermato` | Timeout or uncertain outcome; the UI rolls back to the last verified state. **No automatic retry.** |
 
 A second concurrent control command is rejected to avoid overlapping writes. The physical Cube S may change state later than the Lovelace display.
+
+## Temporary manual heating (v1.4.0)
+
+The **Modalità riscaldamento** select now offers **AUTO**, **Manuale** and
+**Manuale temporaneo**. The third choice commands the same validated
+`ZoneMode=2` as Manuale, but Home Assistant schedules a return to
+`ZoneMode=3` (AUTO) at the **next actual Comfort/Economy change** in the
+original Cube S weekly schedule. Redundant boundaries repeating the same
+preset are skipped. The schedule stored in Cube S is never altered.
+
+Activation requires a **fresh, complete seven-day schedule**; otherwise
+no manual command is sent. The deadline is saved under Home Assistant
+`.storage` and shown as the select attribute
+`ariston_ritorno_auto_previsto` (UTC timestamp). Choosing AUTO or Manuale
+cancels the override. Weekly edits reschedule the deadline when the
+programme is refreshed; changes through the official app are detected on
+the existing three-hour schedule refresh.
+
+Home Assistant and Ariston NET must be reachable for the scheduled return.
+The return is a **single verified cloud command**; after an uncertain
+outcome it is **not automatically repeated**, even on restart.
+The select reports `ariston_manuale_temporaneo_esito: non_confermato`;
+check the official Ariston app and select AUTO explicitly if needed.
+Do not delete `.storage` when upgrading.
 
 ## Cube S weekly schedule editor
 

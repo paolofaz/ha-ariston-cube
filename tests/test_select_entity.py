@@ -102,7 +102,7 @@ def test_auto_manual_roundtrip_uses_existing_guarded_coordinator(monkeypatch):
     module, _ = load(monkeypatch)
     coordinator = Coordinator()
     select = module.AristonZoneProgrammeSelect(coordinator)
-    assert select._attr_options == ["AUTO", "Manuale"]
+    assert select._attr_options == ["AUTO", "Manuale", "Manuale temporaneo"]
     assert select.current_option == "AUTO"
     assert select.available
     asyncio.run(select.async_select_option("Manuale"))
