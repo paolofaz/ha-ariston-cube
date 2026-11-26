@@ -42,13 +42,16 @@ async def async_setup(hass, config) -> bool:
     from .commands import CommandRejected
     from .energy_alignment import AlignmentRejected, EnergyHourAligner
 
-    def get_coordinator():
+    def get_coordinator(call):
         entries = [
             entry for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.state is ConfigEntryState.LOADED
         ]
+        entry_id = call.data.get("entry_id")
+        if entry_id is not None:
+            entries = [entry for entry in entries if entry.entry_id == entry_id]
         if len(entries) != 1:
-            raise HomeAssistantError("Exactly one loaded Ariston Cube entry required")
+            raise HomeAssistantError("Select exactly one loaded Ariston Cube entry via entry_id")
         return entries[0].runtime_data
 
     async def refresh_weekly(coordinator, operation: str) -> None:
@@ -73,7 +76,7 @@ async def async_setup(hass, config) -> bool:
 
     async def preview_change(call):
         """Read-only GET and guarded preview of move/add/remove."""
-        coordinator = get_coordinator()
+        coordinator = get_coordinator(call)
         try:
             source = await coordinator.client.async_read_weekly_program(
                 coordinator.plant_id
@@ -97,7 +100,7 @@ async def async_setup(hass, config) -> bool:
 
     async def write_change(call):
         """One user-approved cloud POST, never retried after ambiguity."""
-        coordinator = get_coordinator()
+        coordinator = get_coordinator(call)
         try:
             result = await coordinator.client.async_write_weekly_change(
                 coordinator.plant_id,
@@ -116,6 +119,7 @@ async def async_setup(hass, config) -> bool:
         return result
 
     change_schema = {
+        vol.Optional("entry_id"): str,
         vol.Required("day"): vol.All(vol.Coerce(int), vol.Range(min=0, max=6)),
         vol.Required("operation"): vol.In(("move", "add", "remove")),
         vol.Optional("from_time", default=""): str,
@@ -139,6 +143,7 @@ async def async_setup(hass, config) -> bool:
     )
 
     clone_fields = {
+        vol.Optional("entry_id"): str,
         vol.Required("source_day"): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=6)
         ),
@@ -149,7 +154,7 @@ async def async_setup(hass, config) -> bool:
 
     async def preview_clone(call):
         """One current seven-day cloud read, no write."""
-        coordinator = get_coordinator()
+        coordinator = get_coordinator(call)
         try:
             source = await coordinator.client.async_read_weekly_program(
                 coordinator.plant_id
@@ -162,7 +167,7 @@ async def async_setup(hass, config) -> bool:
 
     async def write_clone(call):
         """Fingerprint-guarded write of selected weekdays, one POST only."""
-        coordinator = get_coordinator()
+        coordinator = get_coordinator(call)
         try:
             result = await coordinator.client.async_clone_weekly_days(
                 coordinator.plant_id, call.data["source_day"],
@@ -190,8 +195,8 @@ async def async_setup(hass, config) -> bool:
         supports_response=SupportsResponse.ONLY,
     )
 
-    def get_energy_aligner():
-        coordinator = get_coordinator()
+    def get_energy_aligner(call):
+        coordinator = get_coordinator(call)
         if getattr(coordinator, "smc_coordinator", None) is None:
             raise HomeAssistantError("Gas coordinator is not ready")
         aligner = getattr(coordinator, "energy_hour_aligner", None)
@@ -203,13 +208,13 @@ async def async_setup(hass, config) -> bool:
     async def inspect_energy_hour(call):
         """Read only the real existing Recorder hourly statistics."""
         try:
-            return await get_energy_aligner().inspect_hour(call.data["target_start"])
+            return await get_energy_aligner(call).inspect_hour(call.data["target_start"])
         except AlignmentRejected as exc:
             raise HomeAssistantError(str(exc)) from exc
 
     async def inspect_auto_energy_hour(call):
         """Read only the latest in-memory automatic-run reports."""
-        runner = getattr(get_coordinator(), "energy_hour_runner", None)
+        runner = getattr(get_coordinator(call), "energy_hour_runner", None)
         if runner is None:
             return {
                 "status": "read_only_auto_energy_hour_status",
@@ -219,7 +224,7 @@ async def async_setup(hass, config) -> bool:
 
     hass.services.async_register(
         DOMAIN, "inspect_energy_hour_alignment", inspect_energy_hour,
-        schema=vol.Schema({vol.Required("target_start"): str}),
+        schema=vol.Schema({vol.Required("target_start"): str, vol.Optional("entry_id"): str}),
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
