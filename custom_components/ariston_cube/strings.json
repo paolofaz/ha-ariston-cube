@@ -14,6 +14,14 @@
         "data": {
           "plant_id": "Boiler"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect to Ariston NET",
+        "description": "Enter credentials for the existing boiler.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -21,10 +29,12 @@
       "cannot_connect": "Cannot reach Ariston NET",
       "invalid_response": "Unexpected response from Ariston NET",
       "no_plants": "No boilers found for this account",
-      "unknown": "Invalid boiler selection"
+      "unknown": "Invalid boiler selection",
+      "wrong_plant": "The account does not contain the configured boiler."
     },
     "abort": {
-      "already_configured": "This boiler is already configured"
+      "already_configured": "This boiler is already configured",
+      "reauth_successful": "Authentication updated."
     }
   },
   "entity": {
