@@ -62,11 +62,17 @@ Other boiler models and multi-zone systems are **not guaranteed** to work. Gas t
 
 Copy the complete `custom_components/ariston_cube/` directory into `<config>/custom_components/ariston_cube/` in your Home Assistant configuration, restart Home Assistant, and configure the integration. Keep `www/`, `strings.json`, and `translations/` inside the integration directory.
 
+## Maintenance update (v1.4.1)
+
+- Reauthentication updates credentials for the existing plant without recreating the integration entry.
+- HTTP 403/405 responses are treated as temporary cloud errors rather than automatic credential invalidation.
+- Integration services accept an optional `entry_id`; when multiple plants are loaded, explicitly select the intended entry.
+
 ## Cloud rate limiting (v1.3.3)
 
 Under normal conditions, the main cloud polling interval stays at **60 seconds**. If Ariston NET responds with **HTTP 429 (Too Many Requests)**, the integration pauses **all new requests** from both its mobile API and R2 web portal clients for an adaptive cooldown: **5, 10, 20, 40, then up to 60 minutes** after repeated throttling. If Ariston provides a longer valid `Retry-After` header, that delay takes precedence. A successful cloud response after the cooldown resets the escalation.
 
-During a cooldown, Home Assistant may show temporarily unavailable or stale cloud data, and cloud commands cannot be sent. **No writes are queued or automatically retried.** The boiler's local controls and thermostat schedule continue operating independently. Regular scheduled polling resumes after the cooldown; interrupted gas/energy windows are **not automatically backfilled**.
+During a cooldown, Home Assistant may show temporarily unavailable or stale cloud data, and cloud commands cannot be sent. **No ordinary writes are queued or automatically retried.** The only exception is the bounded temporary-manual AUTO restoration described below, when the command was demonstrably not sent. The boiler's local controls and thermostat schedule continue operating independently. Regular scheduled polling resumes after the cooldown; interrupted gas/energy windows are **not automatically backfilled**.
 
 ## Responsive Lovelace controls with cloud confirmation
 
@@ -107,10 +113,7 @@ programme is refreshed; changes through the official app are detected on
 the existing three-hour schedule refresh.
 
 Home Assistant and Ariston NET must be reachable for the scheduled return.
-The return is a **single verified cloud command**; after an uncertain
-outcome it is **not automatically repeated**, even on restart.
-The select reports `ariston_manuale_temporaneo_esito: non_confermato`;
-check the official Ariston app and select AUTO explicitly if needed.
+Since v1.4.1, if the scheduled AUTO command is demonstrably not sent, the integration can retry up to three times after the applicable cloud cooldown, preserving retry state across restarts. After an uncertain outcome it is **not automatically repeated**, even on restart. An exhausted or uncertain restoration produces a persistent notification; the select reports `ariston_manuale_temporaneo_esito: non_confermato` for an uncertain result. Check the official Ariston app and select AUTO explicitly if needed.
 Do not delete `.storage` when upgrading.
 
 ## Cube S weekly schedule editor
@@ -222,6 +225,8 @@ python -m pytest -q
 node --test tests/test_weekly_editor.mjs
 ```
 
+- [v1.4.1 release notes](docs/releases/v1.4.1.md)
+- [v1.4.0 release notes](docs/releases/v1.4.0.md)
 - [v1.3.3 release notes](docs/releases/v1.3.3.md)
 - [v1.3.1 release notes](docs/releases/v1.3.1.md)
 - [v1.3.0 release notes](docs/releases/v1.3.0.md)
