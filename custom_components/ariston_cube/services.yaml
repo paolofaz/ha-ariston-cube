@@ -12,6 +12,13 @@ preview_weekly_change:
     remove (elimina una fascia). Restituisce un fingerprint da usare
     soltanto dopo aver verificato l'anteprima.
   fields:
+    entry_id:
+      name: ID integrazione
+      description: Necessario se sono configurati più impianti Ariston Cube.
+      required: false
+      selector:
+        config_entry:
+          integration: ariston_cube
     day:
       name: "Giorno (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
@@ -65,6 +72,13 @@ write_weekly_change:
     Se la risposta cloud non è confermata, controlla nell'app Ariston
     prima di ritentare.
   fields:
+    entry_id:
+      name: ID integrazione
+      description: Necessario se sono configurati più impianti Ariston Cube.
+      required: false
+      selector:
+        config_entry:
+          integration: ariston_cube
     day:
       name: "Giorno (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
@@ -123,6 +137,13 @@ preview_weekly_clone:
     giorno sorgente su uno o più giorni destinazione. Mostra i
     programmi prima/dopo senza cambiare nulla sul cloud.
   fields:
+    entry_id:
+      name: ID integrazione
+      description: Necessario se sono configurati più impianti Ariston Cube.
+      required: false
+      selector:
+        config_entry:
+          integration: ariston_cube
     source_day:
       name: "Giorno sorgente (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
@@ -149,6 +170,13 @@ clone_weekly_days:
     modificati con un solo POST; il programma completo viene riletto
     e verificato. Non ritentare automaticamente dopo esito incerto.
   fields:
+    entry_id:
+      name: ID integrazione
+      description: Necessario se sono configurati più impianti Ariston Cube.
+      required: false
+      selector:
+        config_entry:
+          integration: ariston_cube
     source_day:
       name: "Giorno sorgente (0=domenica, 1=lunedì ... 6=sabato)"
       required: true
@@ -181,6 +209,13 @@ inspect_energy_hour_alignment:
     per i due sensori cumulativi del gas. Non modifica statistiche,
     sensori o ledger. Disponibile per le ultime 72 ore.
   fields:
+    entry_id:
+      name: ID integrazione
+      description: Necessario se sono configurati più impianti Ariston Cube.
+      required: false
+      selector:
+        config_entry:
+          integration: ariston_cube
     target_start:
       name: "Inizio dell'ora da controllare (timestamp UTC ISO 8601)"
       description: >
@@ -199,3 +234,11 @@ inspect_automatic_energy_hour_alignment:
     Nessun retry automatico o recupero delle fasce perse. Lo storico
     diagnostico si azzera al riavvio di Home Assistant; le statistiche
     Energia e il ledger non vengono modificati da questa lettura.
+  fields:
+    entry_id:
+      name: ID integrazione
+      description: Necessario se sono configurati più impianti Ariston Cube.
+      required: false
+      selector:
+        config_entry:
+          integration: ariston_cube
