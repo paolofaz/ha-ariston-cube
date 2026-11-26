@@ -34,6 +34,14 @@ class AristonConnectionError(AristonError):
     """Temporary network/cloud service error."""
 
 
+class AristonZoneModeNotSent(AristonConnectionError):
+    """A temporary failure before the zone-mode write was transmitted."""
+
+
+class AristonCooldownError(AristonConnectionError):
+    """The local rate limiter rejected a request before transmission."""
+
+
 class AristonResponseError(AristonError):
     """Cloud API response does not match the expected contract."""
 
@@ -79,7 +87,7 @@ class AristonClient:
         try:
             self.rate_limit.check()
         except RateLimitActive as exc:
-            raise AristonConnectionError(
+            raise AristonCooldownError(
                 f"Ariston HTTP 429 cooldown active at {stage}"
             ) from exc
         headers = {
@@ -221,20 +229,26 @@ class AristonClient:
     ) -> dict[str, dict[str, Any]]:
         """Select OFF/MANUAL/SCHEDULE without changing the global plant mode."""
         async with self._lock:
-            if not self._token:
-                await self.async_login()
-            features = await self._load_features(plant_id)
-            read_path = f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si"
-            fresh = parse_main_data(await self._request(
-                "POST", read_path, json_body=make_main_request(features),
-            ))
+            try:
+                if not self._token:
+                    await self.async_login()
+                features = await self._load_features(plant_id)
+                read_path = f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si"
+                fresh = parse_main_data(await self._request(
+                    "POST", read_path, json_body=make_main_request(features),
+                ))
+            except AristonConnectionError as exc:
+                raise AristonZoneModeNotSent("Zone mode write not sent") from exc
             request = build_zone_mode_request(fresh, features, mode)
             if request is None:
                 return fresh
-            response = await self._request(
-                "POST", f"/api/v2/remote/dataItems/{plant_id}/set?umsys=si",
-                json_body=request,
-            )
+            try:
+                response = await self._request(
+                    "POST", f"/api/v2/remote/dataItems/{plant_id}/set?umsys=si",
+                    json_body=request,
+                )
+            except AristonCooldownError as exc:
+                raise AristonZoneModeNotSent("Zone mode write not sent") from exc
             if isinstance(response, dict) and (
                 response.get("success") is False or response.get("ok") is False
             ):
