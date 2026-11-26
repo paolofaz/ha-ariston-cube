@@ -91,12 +91,12 @@ class AristonClient:
                 method, BASE_URL + path, json=json_body, headers=headers,
                 timeout=aiohttp.ClientTimeout(total=25), allow_redirects=True,
             ) as response:
-                if response.status in (401, 403, 405):
+                if response.status == 401:
                     raise AristonAuthError(f"Ariston HTTP {response.status} at {stage}")
                 if response.status == 429:
                     self.rate_limit.record_429(getattr(response, "headers", None))
                     raise AristonConnectionError(f"Ariston HTTP 429 at {stage}")
-                if response.status in (408, 425) or response.status >= 500:
+                if response.status in (403, 405, 408, 425) or response.status >= 500:
                     raise AristonConnectionError(f"Ariston HTTP {response.status} at {stage}")
                 if response.status >= 400:
                     raise AristonResponseError(f"Ariston HTTP {response.status} at {stage}")
