@@ -61,6 +61,41 @@ class AristonCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
         return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
 
+    async def async_step_reauth(self, entry_data):
+        """Reauthenticate the existing plant without creating a new entry."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        entry = self._get_reauth_entry()
+        errors = {}
+        if user_input is not None:
+            client = AristonClient(
+                async_get_clientsession(self.hass),
+                user_input[CONF_USERNAME], user_input[CONF_PASSWORD],
+            )
+            try:
+                plants = await client.async_list_plants()
+                if not any(plant["id"] == entry.data[CONF_PLANT_ID] for plant in plants):
+                    errors["base"] = "wrong_plant"
+                else:
+                    return self.async_update_reload_and_abort(
+                        entry, data_updates=dict(user_input)
+                    )
+            except AristonAuthError:
+                errors["base"] = "invalid_auth"
+            except AristonConnectionError:
+                errors["base"] = "cannot_connect"
+            except AristonResponseError:
+                errors["base"] = "invalid_response"
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({
+                vol.Required(CONF_USERNAME, default=entry.data[CONF_USERNAME]): str,
+                vol.Required(CONF_PASSWORD): str,
+            }),
+            errors=errors,
+        )
+
     async def async_step_plant(self, user_input=None):
         """Select the exact plant if an account has multiple installations."""
         if not self._plants:
