@@ -60,6 +60,15 @@ def load(monkeypatch):
     dt = types.ModuleType("homeassistant.util.dt")
     dt.utcnow = lambda: now[0]
     dt.get_time_zone = ZoneInfo
+    components = types.ModuleType("homeassistant.components")
+    components.__path__ = []
+    notifications = types.ModuleType("homeassistant.components.persistent_notification")
+    notifications.async_create = lambda *args, **kwargs: None
+    components.persistent_notification = notifications
+    api = types.ModuleType(name + ".api")
+    class AristonZoneModeNotSent(Exception):
+        pass
+    api.AristonZoneModeNotSent = AristonZoneModeNotSent
     const = types.ModuleType(name + ".const")
     const.DOMAIN = "ariston_cube"
     states = types.ModuleType(name + ".states")
@@ -69,6 +78,9 @@ def load(monkeypatch):
                       "Giovedì", "Venerdì", "Sabato")
     for path, module in {
         name: package, "homeassistant": ha, "homeassistant.exceptions": exc,
+        "homeassistant.components": components,
+        "homeassistant.components.persistent_notification": notifications,
+        name + ".api": api,
         "homeassistant.helpers": helpers, "homeassistant.helpers.event": event,
         "homeassistant.helpers.storage": storage,
         "homeassistant.util": util, "homeassistant.util.dt": dt,
@@ -239,6 +251,39 @@ def test_failed_return_is_never_retried_after_restart(monkeypatch):
         assert main.calls == [2, 3]
         restored.stop()
 
+    asyncio.run(run())
+
+
+def test_proven_unsent_auto_waits_for_cooldown_and_survives_restart(monkeypatch):
+    mod, Store, now, timers = load(monkeypatch)
+    hass, entry, main, weekly = setup(mod)
+    main.client = types.SimpleNamespace(rate_limit=types.SimpleNamespace(remaining_seconds=lambda: 600))
+    async def run():
+        controller = mod.TemporaryManualController(hass, entry, main, weekly)
+        await controller.async_initialize()
+        await controller.async_activate()
+        now[0] = controller.deadline
+        original = main.async_set_zone_mode
+        async def unsent(mode):
+            main.calls.append(mode)
+            raise mod.AristonZoneModeNotSent("not transmitted")
+        main.async_set_zone_mode = unsent
+        await controller.async_expire()
+        assert controller.retry_count == 1 and not controller.attempted
+        assert (controller.retry_at - now[0]).total_seconds() == 600
+        assert Store.memory[controller._store.key]["retry_count"] == 1
+        controller.stop()
+        restored = mod.TemporaryManualController(hass, entry, main, weekly)
+        await restored.async_initialize()
+        assert timers[-1]["when"] == restored.retry_at
+        await restored.async_expire()
+        assert main.calls == [2, 3]
+        now[0] = restored.retry_at
+        main.async_set_zone_mode = original
+        await restored.async_expire()
+        assert main.calls == [2, 3, 3]
+        assert not restored.active
+        restored.stop()
     asyncio.run(run())
 
 
