@@ -230,6 +230,7 @@ async def async_setup(hass, config) -> bool:
     hass.services.async_register(
         DOMAIN, "inspect_automatic_energy_hour_alignment",
         inspect_auto_energy_hour,
+        schema=vol.Schema({vol.Optional("entry_id"): str}),
         supports_response=SupportsResponse.ONLY,
     )
     return True
