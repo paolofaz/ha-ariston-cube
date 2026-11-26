@@ -80,10 +80,10 @@ def test_login_403_produces_mobile_login_stage():
         client = api.AristonClient(session, "user", "secret")
         try:
             await client.async_login()
-        except api.AristonAuthError as exc:
+        except api.AristonConnectionError as exc:
             assert "HTTP 403 at mobile_login" in str(exc)
             return
-        assert False, "Expected authentication failure"
+        assert False, "Expected temporary cloud failure"
     run(scenario())
 
 
@@ -100,10 +100,10 @@ def test_no_token_is_response_error():
     run(scenario())
 
 
-def test_relogin_once_on_expired_token_405():
+def test_relogin_once_on_expired_token_401():
     session = Session(
         Response({"token": "first"}),
-        Response(status=405),  # first features query
+        Response(status=401),  # first features query
         Response({"token": "renewed"}),
         Response({"zones": [{"num": 1}]}),
         Response({"items": []}),
@@ -116,6 +116,20 @@ def test_relogin_once_on_expired_token_405():
                    if url.endswith("/api/v2/accounts/login")]
     assert len(login_calls) == 2
     assert session.calls[-1][2]["headers"]["ar.authToken"] == "renewed"
+
+
+def test_405_does_not_invalidate_credentials():
+    session = Session(Response({"token": "first"}), Response(status=405))
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        try:
+            await client.async_read_main("GW123")
+        except api.AristonConnectionError:
+            assert client._token == "first"
+        else:
+            assert False, "Expected transient cloud failure"
+    run(scenario())
+    assert len(session.calls) == 2
 
 
 def test_throttle_is_connection_error():
