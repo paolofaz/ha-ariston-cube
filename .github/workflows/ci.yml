@@ -55,7 +55,7 @@ jobs:
         uses: home-assistant/actions/hassfest@master
 
   stable-release:
-    name: Publish stable v1.4.0 after checks
+    name: Publish validated stable version
     needs: [tests, hassfest]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -63,27 +63,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Publish immutable v1.4.0 after all validations pass
+        with:
+          persist-credentials: false
+      - name: Publish immutable version after all validations pass
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          version = json.loads(
-              Path("custom_components/ariston_cube/manifest.json").read_text()
-          )["version"]
-          assert version == "1.4.0", "Refusing incorrect stable release version"
-          PY
-          if gh release view v1.4.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "v1.4.0 already exists; preserve existing tag and correct release title"
-            gh release edit v1.4.0 \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Ariston Cube 1.4.0 — Temporary manual heating"
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$GITHUB_SHA" || exit 0
+          VERSION="$(python -c 'import json; print(json.load(open("custom_components/ariston_cube/manifest.json"))["version"])')"
+          NOTES="docs/releases/v${VERSION}.md"
+          test -f "$NOTES" || exit 0
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             exit 0
           fi
-          gh release create v1.4.0 \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "Ariston Cube 1.4.0 — Temporary manual heating" \
-            --notes-file docs/releases/v1.4.0.md
+          gh release create "v${VERSION}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Ariston Cube ${VERSION}" --notes-file "$NOTES"
