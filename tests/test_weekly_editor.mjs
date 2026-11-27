@@ -69,13 +69,14 @@ function makeCard({
   card.setConfig({entity: "sensor.cube_weekly", title: "Settimana Cube S"});
   const calls = [];
   const hass = {
-    states: {"sensor.cube_weekly": {state: "Disponibile", attributes: {...initial}}},
+    states: {"sensor.cube_weekly": {state: "Disponibile", attributes: {...initial, entry_id: "plant-entry-a"}}},
     services: enabled ? {ariston_cube: {
       preview_weekly_change: {},
       write_weekly_change: {},
       ...(cloneEditor ? {preview_weekly_clone: {}, clone_weekly_days: {}} : {}),
     }} : {},
     async callService(...args) {
+      assert.equal(args[2].entry_id, "plant-entry-a", "Target the selected schedule sensor entry");
       calls.push(args);
       const service = args[1];
       if (service === "preview_weekly_clone") {
