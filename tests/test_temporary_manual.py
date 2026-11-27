@@ -63,7 +63,9 @@ def load(monkeypatch):
     components = types.ModuleType("homeassistant.components")
     components.__path__ = []
     notifications = types.ModuleType("homeassistant.components.persistent_notification")
-    notifications.async_create = lambda *args, **kwargs: None
+    notifications.active = {}
+    notifications.async_create = lambda hass, message, **kw: notifications.active.update({kw["notification_id"]: message})
+    notifications.async_dismiss = lambda hass, notification_id: notifications.active.pop(notification_id, None)
     components.persistent_notification = notifications
     api = types.ModuleType(name + ".api")
     class AristonZoneModeNotSent(Exception):
@@ -244,11 +246,17 @@ def test_failed_return_is_never_retried_after_restart(monkeypatch):
         assert main.calls == [2, 3]
         assert controller.attempted
         assert controller.error == "non_confermato"
+        notifications = sys.modules["homeassistant.components.persistent_notification"]
+        assert notifications.active
         controller.stop()
         restored = mod.TemporaryManualController(hass, entry, main, weekly)
         await restored.async_initialize()
         assert restored.attempted
         assert main.calls == [2, 3]
+        main.fail = False
+        await restored.async_select_permanent(3)
+        assert not notifications.active
+        assert not restored.active
         restored.stop()
 
     asyncio.run(run())
