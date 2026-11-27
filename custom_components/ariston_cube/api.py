@@ -230,14 +230,24 @@ class AristonClient:
         """Select OFF/MANUAL/SCHEDULE without changing the global plant mode."""
         async with self._lock:
             try:
-                if not self._token:
-                    await self.async_login()
-                features = await self._load_features(plant_id)
-                read_path = f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si"
-                fresh = parse_main_data(await self._request(
-                    "POST", read_path, json_body=make_main_request(features),
-                ))
-            except AristonConnectionError as exc:
+                # Read-only authentication recovery; no zone-mode write has
+                # been issued yet. Do not retry the actual set endpoint.
+                for attempt in range(2):
+                    try:
+                        if not self._token:
+                            await self.async_login()
+                        features = await self._load_features(plant_id)
+                        read_path = f"/api/v2/remote/dataItems/{plant_id}/get?umsys=si"
+                        fresh = parse_main_data(await self._request(
+                            "POST", read_path, json_body=make_main_request(features),
+                        ))
+                        break
+                    except AristonAuthError:
+                        self._token = None
+                        self._features.clear()
+                        if attempt:
+                            raise
+            except (AristonConnectionError, AristonAuthError) as exc:
                 raise AristonZoneModeNotSent("Zone mode write not sent") from exc
             request = build_zone_mode_request(fresh, features, mode)
             if request is None:
