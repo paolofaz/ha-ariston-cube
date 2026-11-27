@@ -647,7 +647,7 @@ test("ordinary time-move popup no longer mentions reinstalling stable", async ()
 
 test("a changed plant cannot reuse a preview for the original plant", async () => {
   const {card, hass, calls} = makeCard();
-  card._toggleEdit(1);
+  card._toggleEdit(0);
   card.fromTime = "06:00";
   card.toTime = "06:15";
   await card._previewChange();
