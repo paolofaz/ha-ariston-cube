@@ -308,6 +308,50 @@ def test_mode_auto_uses_zone_only_once_and_readback():
     ]
 
 
+def test_zone_mode_auth_failure_before_write_is_proven_unsent():
+    session = Session(Response(status=401), Response(status=401))
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        with pytest.raises(api.AristonZoneModeNotSent) as error:
+            await client.async_set_zone_mode("GW123", 3)
+        assert isinstance(error.value.__cause__, api.AristonAuthError)
+    run(scenario())
+    assert len(session.calls) == 2
+    assert not any("/set?" in url for _, url, _ in session.calls)
+
+
+def test_zone_mode_auth_failure_after_write_is_not_retryable():
+    session = Session(
+        Response({"token": "x"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_mode_items(zone_mode=2)),
+        Response(status=401),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        with pytest.raises(api.AristonAuthError):
+            await client.async_set_zone_mode("GW123", 3)
+    run(scenario())
+    assert sum("/set?" in url for _, url, _ in session.calls) == 1
+
+
+def test_zone_mode_read_authentication_refreshes_before_one_write():
+    session = Session(
+        Response({"token": "old"}),
+        Response(status=401),
+        Response({"token": "fresh"}),
+        Response({"zones": [{"num": 1}]}),
+        Response(_mode_items(zone_mode=2)),
+        Response(None),
+        Response(_mode_items(zone_mode=3)),
+    )
+    async def scenario():
+        client = api.AristonClient(session, "user", "secret")
+        assert (await client.async_set_zone_mode("GW123", 3))["ZoneMode"]["value"] == 3
+    run(scenario())
+    assert sum("/set?" in url for _, url, _ in session.calls) == 1
+
+
 def test_mode_no_unsupported_transition_when_options_absent():
     session = Session(
         Response({"token": "x"}),
