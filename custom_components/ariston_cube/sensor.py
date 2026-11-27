@@ -64,7 +64,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = entry.runtime_data
     schedule = get_or_create_weekly_coordinator(hass, entry)
     entities = [AristonTemperature(coordinator, description) for description in DESCRIPTIONS]
-    entities.append(AristonWeeklySchedule(schedule))
+    entities.append(AristonWeeklySchedule(schedule, entry.entry_id))
     smc = AristonSmcCoordinator(hass, coordinator, entry_id=entry.entry_id)
     # Read-only pointer for the optional manual Energy-hour test. No new
     # sensor, state, unique ID, ledger offset or saved checkpoint is touched.
@@ -161,8 +161,9 @@ class AristonWeeklySchedule(AristonEntity, SensorEntity):
     _attr_name = "Programma settimanale Cube S"
     _attr_icon = "mdi:calendar-clock"
 
-    def __init__(self, schedule_coordinator) -> None:
+    def __init__(self, schedule_coordinator, entry_id: str) -> None:
         super().__init__(schedule_coordinator, "weekly_program")
+        self._entry_id = entry_id
 
     @property
     def native_value(self) -> str | None:
@@ -174,8 +175,9 @@ class AristonWeeklySchedule(AristonEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         data = self.coordinator.data
         if not data:
-            return {}
+            return {"entry_id": self._entry_id}
         return {
+            "entry_id": self._entry_id,
             "gruppi_programma": data["plan_count"],
             **{
                 day: daily_description(slices)
