@@ -643,3 +643,17 @@ test("ordinary time-move popup no longer mentions reinstalling stable", async ()
   assert.ok(browser.prompts[0].includes("DOPO: "));
   assert.ok(!browser.prompts[0].includes("reinstallando la stable"));
 });
+
+
+test("a changed plant cannot reuse a preview for the original plant", async () => {
+  const {card, hass, calls} = makeCard();
+  card._toggleEdit(1);
+  card.fromTime = "06:00";
+  card.toTime = "06:15";
+  await card._previewChange();
+  assert.ok(card.preview);
+  hass.states["sensor.cube_weekly"].attributes.entry_id = "plant-entry-b";
+  card.hass = hass;
+  await card._saveChange();
+  assert.equal(calls.length, 1, "Do not send a write to a different plant");
+});
