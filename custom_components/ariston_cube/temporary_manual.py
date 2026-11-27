@@ -136,6 +136,8 @@ class TemporaryManualController:
                     await self._clear_locked()
                 elif not self.attempted:
                     self._arm_timer()
+                else:
+                    self._alert_restore_failure()
         self._unsubscribers.extend((
             self.main.async_add_listener(self._on_main_update),
             self.weekly.async_add_listener(self._on_schedule_update),
@@ -189,6 +191,7 @@ class TemporaryManualController:
         self.retry_at = None
         self.error = None
         await self._save()
+        self._dismiss_restore_failure()
         self._notify()
 
     async def async_activate(self) -> None:
@@ -220,6 +223,7 @@ class TemporaryManualController:
                 _LOGGER.error("Cube S temporary override persistence failed (%s)", type(exc).__name__)
                 # Still schedule locally; no additional cloud command is safe here.
             self._arm_timer()
+            self._dismiss_restore_failure()
             self._notify()
 
     async def async_select_permanent(self, mode: int) -> None:
@@ -274,6 +278,13 @@ class TemporaryManualController:
                 self._notify()
             else:
                 await self._clear_locked()
+
+    def _dismiss_restore_failure(self) -> None:
+        from homeassistant.components import persistent_notification
+
+        persistent_notification.async_dismiss(
+            self.hass, f"{DOMAIN}_temporary_manual_{self.entry.entry_id}"
+        )
 
     def _alert_restore_failure(self) -> None:
         """Make an unconfirmed restoration visible outside the entity attributes."""
