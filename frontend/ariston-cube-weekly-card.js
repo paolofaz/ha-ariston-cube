@@ -168,9 +168,15 @@
       const state = this.homeAssistant?.states?.[this.config.entity];
       return DAYS.map((d) => parseDay(state?.attributes?.[d[0]]));
     }
+    get _entryId() {
+      const state = this.homeAssistant?.states?.[this.config.entity];
+      const id = state?.attributes?.entry_id;
+      return state && !["unknown", "unavailable"].includes(state.state)
+        && typeof id === "string" && id.length ? id : null;
+    }
     get _canEdit() {
       const services = this.homeAssistant?.services?.ariston_cube || {};
-      return Boolean(services.preview_weekly_change && services.write_weekly_change
+      return Boolean(this._entryId && services.preview_weekly_change && services.write_weekly_change
         && typeof this.homeAssistant.callService === "function");
     }
     get _canAddRemove() {
@@ -186,6 +192,7 @@
     _invalidatePreview() {
       this.preview = null;
       this.previewRequest = null;
+      this.previewEntryId = null;
       this.message = "";
       this.messageKind = "";
     }
@@ -215,8 +222,10 @@
     async _invoke(service, data) {
       // Home Assistant's callService signature includes notifyOnError as the
       // fifth argument and returnResponse as the SIXTH argument.
+      const entryId = this._entryId;
+      if (!entryId) throw new Error("Impianto Ariston non disponibile; nessuna modifica inviata.");
       const result = await this.homeAssistant.callService(
-        "ariston_cube", service, data, undefined, false, true
+        "ariston_cube", service, {...data, entry_id: entryId}, undefined, false, true
       );
       if (!result || !result.response) {
         throw new Error("Nessuna risposta dall'azione Home Assistant");
@@ -282,6 +291,7 @@
       }
       const payload = this._changePayload();
       const snapshot = JSON.stringify(payload);
+      const entryId = this._entryId;
       const operation = payload.operation;
       this.pending = true;
       this._invalidatePreview();
@@ -317,11 +327,13 @@
             || typeof result.source_fingerprint !== "string"
             || !/^[a-f0-9]{64}$/.test(result.source_fingerprint)
             || !(cloneValid || ordinaryValid)
+            || this._entryId !== entryId
             || JSON.stringify(this._changePayload()) !== snapshot) {
           throw new Error("Anteprima non coerente. Nessuna modifica inviata.");
         }
         this.preview = result;
         this.previewRequest = snapshot;
+        this.previewEntryId = entryId;
         this.message = "Anteprima letta dal cloud. Controlla gli orari prima di salvare.";
         this.messageKind = "";
       } catch (err) {
@@ -336,6 +348,7 @@
     async _saveChange() {
       if (this.pending || this.blocked || !this.preview || !this._canEdit
           || !this._changeIsValid()
+          || this.previewEntryId !== this._entryId
           || this.previewRequest !== JSON.stringify(this._changePayload())) return;
       const before = this.preview.before, after = this.preview.after;
       const fingerprint = this.preview.source_fingerprint;
