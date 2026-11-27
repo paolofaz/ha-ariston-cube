@@ -62,6 +62,13 @@ Other boiler models and multi-zone systems are **not guaranteed** to work. Gas t
 
 Copy the complete `custom_components/ariston_cube/` directory into `<config>/custom_components/ariston_cube/` in your Home Assistant configuration, restart Home Assistant, and configure the integration. Keep `www/`, `strings.json`, and `translations/` inside the integration directory.
 
+## Maintenance update (v1.4.2)
+
+- Weekly-card preview and write actions automatically target the plant associated with the selected weekly sensor. A preview cannot be reused for another plant.
+- Authentication is recovered during read-only zone-mode preflight; a write is never replayed after an ambiguous response.
+- Unresolved AUTO restoration warnings are restored on restart and cleared after confirmed resolution or an explicit successful replacement command.
+- English runtime translations are included.
+
 ## Maintenance update (v1.4.1)
 
 - Reauthentication updates credentials for the existing plant without recreating the integration entry.
@@ -141,7 +148,7 @@ The JavaScript resource is registered automatically for **Storage-mode** dashboa
 
 ```yaml
 resources:
-  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.3.0
+  - url: /ariston_cube/ariston-cube-weekly-card.js?v=1.4.2
     type: module
 ```
 
@@ -200,7 +207,7 @@ data:
 | --- | --- |
 | Integration does not appear | Restart Home Assistant after installing; check `custom_components/ariston_cube` |
 | A command rolls back | Check `ariston_comando_esito`; for `non_confermato`, verify the actual value in the Ariston app before retrying |
-| Weekly card looks outdated or cannot edit | Update the JS resource to `?v=1.3.0`, reload the dashboard, and check that the actions are registered |
+| Weekly card looks outdated or cannot edit | Update the JS resource to `?v=1.4.2`, reload the dashboard, and check that the actions are registered |
 | An automatic gas cycle is skipped | Inspect `inspect_automatic_energy_hour_alignment`; missing source data, unavailable Recorder, or zero consumption must not trigger forced writes |
 | Historical gas totals look wrong | Preserve Recorder and `.storage` checkpoints; do not reinstall from scratch to alter statistics |
 
@@ -225,6 +232,7 @@ python -m pytest -q
 node --test tests/test_weekly_editor.mjs
 ```
 
+- [v1.4.2 release notes](docs/releases/v1.4.2.md)
 - [v1.4.1 release notes](docs/releases/v1.4.1.md)
 - [v1.4.0 release notes](docs/releases/v1.4.0.md)
 - [v1.3.3 release notes](docs/releases/v1.3.3.md)
